@@ -21,14 +21,17 @@ export function useEdgeColumnResize({
 	const dragRef = useRef<DragState | null>(null);
 	const moveHandlerRef = useRef<(event: MouseEvent) => void>(() => {});
 	const upHandlerRef = useRef<(event: MouseEvent) => void>(() => {});
-	const [widths, setWidths] = useState<Array<number | null>>(
-		() => Array.from({ length: columnCount }, () => null),
+	const [widths, setWidths] = useState<Array<number | null>>(() =>
+		Array.from({ length: columnCount }, () => null),
 	);
 	const [hoveredColumn, setHoveredColumn] = useState<number | null>(null);
 
 	useEffect(() => {
 		setWidths((prev) => {
-			const next = Array.from({ length: columnCount }, (_, i) => prev[i] ?? null);
+			const next = Array.from(
+				{ length: columnCount },
+				(_, i) => prev[i] ?? null,
+			);
 			return next;
 		});
 	}, [columnCount]);
@@ -46,12 +49,14 @@ export function useEdgeColumnResize({
 			if (!cell || !tableRef.current.contains(cell)) return null;
 
 			const rect = cell.getBoundingClientRect();
-			const nearRight = Math.abs(event.clientX - rect.right) <= edgeThreshold;
+			const nearRight =
+				Math.abs(event.clientX - rect.right) <= edgeThreshold;
 			if (nearRight) {
 				return Math.min(cell.cellIndex, columnCount - 1);
 			}
 
-			const nearLeft = Math.abs(event.clientX - rect.left) <= edgeThreshold;
+			const nearLeft =
+				Math.abs(event.clientX - rect.left) <= edgeThreshold;
 			if (nearLeft && cell.cellIndex > 0) {
 				return Math.min(cell.cellIndex - 1, columnCount - 1);
 			}
@@ -102,8 +107,11 @@ export function useEdgeColumnResize({
 			event.preventDefault();
 
 			const sampleRow = tableRef.current.querySelector("tr");
-			const sampleCell = sampleRow?.children.item(edgeColumn) as HTMLElement | null;
-			const measuredWidth = sampleCell?.getBoundingClientRect().width ?? minColumnWidth;
+			const sampleCell = sampleRow?.children.item(
+				edgeColumn,
+			) as HTMLElement | null;
+			const measuredWidth =
+				sampleCell?.getBoundingClientRect().width ?? minColumnWidth;
 			const startWidth = widths[edgeColumn] ?? measuredWidth;
 
 			dragRef.current = {

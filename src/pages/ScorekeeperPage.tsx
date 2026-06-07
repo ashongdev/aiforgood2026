@@ -597,7 +597,6 @@ function QualifiersGrid({
 			</colgroup>
 			<thead>
 				<tr className="bg-editorial-ink text-white text-[10px] uppercase tracking-widest">
-					<th className="px-3 py-2 text-left font-black w-6">#</th>
 					<th className="px-2 py-2 text-center font-black w-10">
 						Tbl
 					</th>
@@ -665,11 +664,6 @@ function QualifiersGrid({
 									: "bg-editorial-bg/50"
 							} ${hasError ? "bg-red-50" : ""}`}
 						>
-							{/* Row number */}
-							<td className="px-3 py-0 text-gray-400 font-mono text-xs">
-								{rowIndex + 1}
-							</td>
-
 							{/* Table number */}
 							<td className="px-2 py-0 text-center">
 								<span className="text-xs font-bold text-gray-500">

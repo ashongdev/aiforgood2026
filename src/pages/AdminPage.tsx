@@ -1,5 +1,3 @@
-import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
 	AlertCircle,
 	ChevronDown,
@@ -16,10 +14,17 @@ import {
 	Upload,
 	Users,
 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useEdgeColumnResize } from "../hooks/useEdgeColumnResize";
+import type {
+	Category,
+	MatchWithTeams,
+	Phase,
+	Team,
+} from "../lib/database.types";
 import { supabase } from "../lib/supabase";
-import type { Category, MatchWithTeams, Phase, Team } from "../lib/database.types";
 
 // ─── Bulk-add types & helpers ─────────────────────────────────────────────────
 
@@ -33,21 +38,45 @@ interface BulkRow {
 	team_description: string;
 }
 
-const BULK_COLS = ["team_name", "category", "country", "coach_name", "team_members", "team_description"] as const;
-type BulkCol = typeof BULK_COLS[number];
+const BULK_COLS = [
+	"team_name",
+	"category",
+	"country",
+	"coach_name",
+	"team_members",
+	"team_description",
+] as const;
+type BulkCol = (typeof BULK_COLS)[number];
 // Columns that are text inputs (exclude category select) — used for arrow-key col count
 const BULK_INPUT_COUNT = BULK_COLS.length;
 
 function makeEmptyBulkRow(cat: Category): BulkRow {
-	return { _id: crypto.randomUUID(), team_name: "", category: cat, country: "", coach_name: "", team_members: "", team_description: "" };
+	return {
+		_id: crypto.randomUUID(),
+		team_name: "",
+		category: cat,
+		country: "",
+		coach_name: "",
+		team_members: "",
+		team_description: "",
+	};
 }
 
 function bulkRowHasData(r: BulkRow): boolean {
-	return !!(r.country || r.coach_name || r.team_members || r.team_description);
+	return !!(
+		r.country ||
+		r.coach_name ||
+		r.team_members ||
+		r.team_description
+	);
 }
 
 function focusBulkCell(row: number, col: number) {
-	(document.querySelector<HTMLElement>(`[data-bulk-row="${row}"][data-bulk-col="${col}"]`))?.focus();
+	document
+		.querySelector<HTMLElement>(
+			`[data-bulk-row="${row}"][data-bulk-col="${col}"]`,
+		)
+		?.focus();
 }
 
 function parseCSVLine(line: string): string[] {
@@ -57,10 +86,13 @@ function parseCSVLine(line: string): string[] {
 	for (let i = 0; i < line.length; i++) {
 		const ch = line[i];
 		if (ch === '"') {
-			if (inQuotes && line[i + 1] === '"') { cur += '"'; i++; }
-			else inQuotes = !inQuotes;
+			if (inQuotes && line[i + 1] === '"') {
+				cur += '"';
+				i++;
+			} else inQuotes = !inQuotes;
 		} else if (ch === "," && !inQuotes) {
-			result.push(cur); cur = "";
+			result.push(cur);
+			cur = "";
 		} else {
 			cur += ch;
 		}
@@ -70,31 +102,47 @@ function parseCSVLine(line: string): string[] {
 }
 
 function parseCSV(text: string, defaultCategory: Category): BulkRow[] {
-	const lines = text.trim().split(/\r?\n/).filter((l) => l.trim());
+	const lines = text
+		.trim()
+		.split(/\r?\n/)
+		.filter((l) => l.trim());
 	if (lines.length < 2) return [];
-	const rawHeaders = parseCSVLine(lines[0]).map((h) => h.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z_]/g, ""));
+	const rawHeaders = parseCSVLine(lines[0]).map((h) =>
+		h
+			.toLowerCase()
+			.replace(/\s+/g, "_")
+			.replace(/[^a-z_]/g, ""),
+	);
 	const colMap: Record<string, BulkCol> = {
-		team_name: "team_name", team: "team_name", name: "team_name",
+		team_name: "team_name",
+		team: "team_name",
+		name: "team_name",
 		category: "category",
 		country: "country",
-		coach_name: "coach_name", coach: "coach_name",
-		team_members: "team_members", members: "team_members",
-		team_description: "team_description", description: "team_description",
+		coach_name: "coach_name",
+		coach: "coach_name",
+		team_members: "team_members",
+		members: "team_members",
+		team_description: "team_description",
+		description: "team_description",
 	};
-	return lines.slice(1).map((line) => {
-		const cells = parseCSVLine(line);
-		const row = makeEmptyBulkRow(defaultCategory);
-		rawHeaders.forEach((h, i) => {
-			const col = colMap[h];
-			if (!col || cells[i] === undefined) return;
-			if (col === "category") {
-				row.category = cells[i] === "Senior" ? "Senior" : "Junior";
-			} else {
-				row[col] = cells[i];
-			}
-		});
-		return row;
-	}).filter((r) => r.team_name || bulkRowHasData(r));
+	return lines
+		.slice(1)
+		.map((line) => {
+			const cells = parseCSVLine(line);
+			const row = makeEmptyBulkRow(defaultCategory);
+			rawHeaders.forEach((h, i) => {
+				const col = colMap[h];
+				if (!col || cells[i] === undefined) return;
+				if (col === "category") {
+					row.category = cells[i] === "Senior" ? "Senior" : "Junior";
+				} else {
+					row[col] = cells[i];
+				}
+			});
+			return row;
+		})
+		.filter((r) => r.team_name || bulkRowHasData(r));
 }
 
 // ─── Types & pure helpers ──────────────────────────────────────────────────────
@@ -126,22 +174,48 @@ function targetPhaseFor(x: AdvanceCount): Phase {
 function nextPhaseFor(phase: Phase): Phase | null {
 	const chain: Partial<Record<Phase, Phase>> = {
 		"Pre-Quarterfinals": "Quarterfinals",
-		"Quarterfinals": "Semifinals",
-		"Semifinals": "Finals",
+		Quarterfinals: "Semifinals",
+		Semifinals: "Finals",
 	};
 	return chain[phase] ?? null;
 }
 
 function seedPairings(n: AdvanceCount): [number, number][] {
-	if (n === 16) return [[1,16],[8,9],[4,13],[5,12],[2,15],[7,10],[3,14],[6,11]];
-	if (n === 8)  return [[1,8],[4,5],[2,7],[3,6]];
-	return [[1,4],[2,3]];
+	if (n === 16)
+		return [
+			[1, 16],
+			[8, 9],
+			[4, 13],
+			[5, 12],
+			[2, 15],
+			[7, 10],
+			[3, 14],
+			[6, 11],
+		];
+	if (n === 8)
+		return [
+			[1, 8],
+			[4, 5],
+			[2, 7],
+			[3, 6],
+		];
+	return [
+		[1, 4],
+		[2, 3],
+	];
 }
 
 function computeStandings(matches: MatchWithTeams[]): Standing[] {
-	const map = new Map<string, { team: Team; best_round: number; total: number }>();
+	const map = new Map<
+		string,
+		{ team: Team; best_round: number; total: number }
+	>();
 
-	const processTeam = (id: string | null, team: Team | null, rounds: (number | null)[]) => {
+	const processTeam = (
+		id: string | null,
+		team: Team | null,
+		rounds: (number | null)[],
+	) => {
 		if (!id || !team) return;
 		const scored = rounds.filter((v): v is number => v !== null && v > 0);
 		if (scored.length === 0) {
@@ -155,13 +229,32 @@ function computeStandings(matches: MatchWithTeams[]): Standing[] {
 	};
 
 	for (const m of matches) {
-		processTeam(m.team_1_id, m.team_1, [m.team_1_r1, m.team_1_r2, m.team_1_r3, m.team_1_r4]);
-		processTeam(m.team_2_id, m.team_2, [m.team_2_r1, m.team_2_r2, m.team_2_r3, m.team_2_r4]);
+		processTeam(m.team_1_id, m.team_1, [
+			m.team_1_r1,
+			m.team_1_r2,
+			m.team_1_r3,
+			m.team_1_r4,
+		]);
+		processTeam(m.team_2_id, m.team_2, [
+			m.team_2_r1,
+			m.team_2_r2,
+			m.team_2_r3,
+			m.team_2_r4,
+		]);
 	}
 
 	return Array.from(map.values())
-		.sort((a, b) => b.best_round !== a.best_round ? b.best_round - a.best_round : b.total - a.total)
-		.map((e, i) => ({ team: e.team, best_round: e.best_round, total_points: e.total, rank: i + 1 }));
+		.sort((a, b) =>
+			b.best_round !== a.best_round
+				? b.best_round - a.best_round
+				: b.total - a.total,
+		)
+		.map((e, i) => ({
+			team: e.team,
+			best_round: e.best_round,
+			total_points: e.total,
+			rank: i + 1,
+		}));
 }
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
@@ -171,11 +264,15 @@ export function AdminPage() {
 	const navigate = useNavigate();
 
 	const [category, setCategory] = useState<Category>("Junior");
-	const [activeTab, setActiveTab] = useState<"qualifiers" | "bracket" | "teams">("qualifiers");
+	const [activeTab, setActiveTab] = useState<
+		"qualifiers" | "bracket" | "teams"
+	>("qualifiers");
 
 	// Data
 	const [allTeams, setAllTeams] = useState<Team[]>([]);
-	const [qualifierMatches, setQualifierMatches] = useState<MatchWithTeams[]>([]);
+	const [qualifierMatches, setQualifierMatches] = useState<MatchWithTeams[]>(
+		[],
+	);
 	const [elimMatches, setElimMatches] = useState<MatchWithTeams[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
 
@@ -194,14 +291,16 @@ export function AdminPage() {
 	const [advanceSuccess, setAdvanceSuccess] = useState<string | null>(null);
 
 	// Bracket winner confirmation
-	const [winnerConfirming, setWinnerConfirming] = useState<string | null>(null);
+	const [winnerConfirming, setWinnerConfirming] = useState<string | null>(
+		null,
+	);
 	const [overrideMatchId, setOverrideMatchId] = useState<string | null>(null);
 
 	// Panel open states
-	const [addMatchOpen, setAddMatchOpen] = useState(true);
-	const [matchListOpen, setMatchListOpen] = useState(true);
-	const [standingsOpen, setStandingsOpen] = useState(true);
-	const [advancePanelOpen, setAdvancePanelOpen] = useState(true);
+	const [addMatchOpen, setAddMatchOpen] = useState(false);
+	const [matchListOpen, setMatchListOpen] = useState(false);
+	const [standingsOpen, setStandingsOpen] = useState(false);
+	const [advancePanelOpen, setAdvancePanelOpen] = useState(false);
 
 	// Phase locks (keyed by phase string, value = lock_type)
 	const [phaseLocks, setPhaseLocks] = useState<Record<string, string>>({});
@@ -214,16 +313,24 @@ export function AdminPage() {
 		setAdvanceSuccess(null);
 
 		const [teamsRes, qRes, eRes] = await Promise.all([
-			supabase.from("teams").select("*").eq("category", category).order("team_name"),
+			supabase
+				.from("teams")
+				.select("*")
+				.eq("category", category)
+				.order("team_name"),
 			supabase
 				.from("matches")
-				.select("*, team_1:team_1_id(id,team_name,category), team_2:team_2_id(id,team_name,category), winner:winner_id(id,team_name,category)")
+				.select(
+					"*, team_1:team_1_id(id,team_name,category), team_2:team_2_id(id,team_name,category), winner:winner_id(id,team_name,category)",
+				)
 				.eq("phase", "Qualifiers")
 				.eq("category", category)
 				.order("match_order"),
 			supabase
 				.from("matches")
-				.select("*, team_1:team_1_id(id,team_name,category), team_2:team_2_id(id,team_name,category), winner:winner_id(id,team_name,category)")
+				.select(
+					"*, team_1:team_1_id(id,team_name,category), team_2:team_2_id(id,team_name,category), winner:winner_id(id,team_name,category)",
+				)
 				.in("phase", ELIM_PHASES)
 				.eq("category", category)
 				.order("match_order"),
@@ -236,10 +343,15 @@ export function AdminPage() {
 	}
 
 	async function loadPhaseLocks() {
-		const { data } = await supabase.from("phase_locks").select("*").eq("category", category);
+		const { data } = await supabase
+			.from("phase_locks")
+			.select("*")
+			.eq("category", category);
 		if (data) {
 			const locks: Record<string, string> = {};
-			(data as any[]).forEach((l) => { locks[l.phase] = l.lock_type; });
+			(data as any[]).forEach((l) => {
+				locks[l.phase] = l.lock_type;
+			});
 			setPhaseLocks(locks);
 		}
 	}
@@ -252,9 +364,17 @@ export function AdminPage() {
 	useEffect(() => {
 		const channel = supabase
 			.channel(`admin-realtime-${category}`)
-			.on("postgres_changes", { event: "*", schema: "public", table: "matches" }, () => { loadData(); })
+			.on(
+				"postgres_changes",
+				{ event: "*", schema: "public", table: "matches" },
+				() => {
+					loadData();
+				},
+			)
 			.subscribe();
-		return () => { supabase.removeChannel(channel); };
+		return () => {
+			supabase.removeChannel(channel);
+		};
 	}, [category]);
 
 	// ── Phase lock management ───────────────────────────────────────────────────
@@ -262,7 +382,10 @@ export function AdminPage() {
 	async function handleLockPhase(phase: string, lockType: "full" | "scores") {
 		const { error } = await supabase
 			.from("phase_locks")
-			.upsert({ phase, category, lock_type: lockType }, { onConflict: "phase,category" });
+			.upsert(
+				{ phase, category, lock_type: lockType },
+				{ onConflict: "phase,category" },
+			);
 		if (!error) loadPhaseLocks();
 	}
 
@@ -279,8 +402,14 @@ export function AdminPage() {
 
 	async function handleCreateMatch() {
 		setCreateError(null);
-		if (!newTeam1 || !newTeam2) { setCreateError("Select both teams."); return; }
-		if (newTeam1 === newTeam2) { setCreateError("A team cannot play against itself."); return; }
+		if (!newTeam1 || !newTeam2) {
+			setCreateError("Select both teams.");
+			return;
+		}
+		if (newTeam1 === newTeam2) {
+			setCreateError("A team cannot play against itself.");
+			return;
+		}
 
 		setIsCreating(true);
 		const { error } = await supabase.from("matches").insert({
@@ -296,14 +425,21 @@ export function AdminPage() {
 		if (error) {
 			setCreateError(error.message);
 		} else {
-			setNewTeam1(""); setNewTeam2(""); setNewTable("");
+			setNewTeam1("");
+			setNewTeam2("");
+			setNewTable("");
 			loadData();
 		}
 	}
 
 	async function handleAutoGenerate() {
 		if (allTeams.length < 2) return;
-		if (!confirm(`Auto-generate ${Math.floor(allTeams.length / 2)} qualifier matches by pairing all ${allTeams.length} teams sequentially? Existing qualifier matches will NOT be removed.`)) return;
+		if (
+			!confirm(
+				`Auto-generate ${Math.floor(allTeams.length / 2)} qualifier matches by pairing all ${allTeams.length} teams sequentially? Existing qualifier matches will NOT be removed.`,
+			)
+		)
+			return;
 
 		const rows = [];
 		for (let i = 0; i + 1 < allTeams.length; i += 2) {
@@ -318,13 +454,24 @@ export function AdminPage() {
 		}
 
 		const { error } = await supabase.from("matches").insert(rows);
-		if (error) { setCreateError(error.message); }
-		else { loadData(); }
+		if (error) {
+			setCreateError(error.message);
+		} else {
+			loadData();
+		}
 	}
 
 	async function handleDeleteMatch(matchId: string) {
-		if (!confirm("Delete this qualifier match? All entered scores will be permanently lost.")) return;
-		const { error } = await supabase.from("matches").delete().eq("id", matchId);
+		if (
+			!confirm(
+				"Delete this qualifier match? All entered scores will be permanently lost.",
+			)
+		)
+			return;
+		const { error } = await supabase
+			.from("matches")
+			.delete()
+			.eq("id", matchId);
 		if (!error) loadData();
 	}
 
@@ -335,23 +482,33 @@ export function AdminPage() {
 	const pairings = seedPairings(advanceCount);
 	const topTeams = standings.slice(0, advanceCount);
 	const elimByPhase = ELIM_PHASES.reduce<Record<string, MatchWithTeams[]>>(
-		(acc, p) => { acc[p] = elimMatches.filter((m) => m.phase === p); return acc; },
+		(acc, p) => {
+			acc[p] = elimMatches.filter((m) => m.phase === p);
+			return acc;
+		},
 		{},
 	);
 	const bracketAlreadyExists = (elimByPhase[targetPhase]?.length ?? 0) > 0;
-	const activeBracketPhases = ELIM_PHASES.filter((p) => (elimByPhase[p]?.length ?? 0) > 0);
+	const activeBracketPhases = ELIM_PHASES.filter(
+		(p) => (elimByPhase[p]?.length ?? 0) > 0,
+	);
 	const pendingWinners = activeBracketPhases.reduce(
-		(n, p) => n + (elimByPhase[p]?.filter((m) => !m.winner_id).length ?? 0), 0,
+		(n, p) => n + (elimByPhase[p]?.filter((m) => !m.winner_id).length ?? 0),
+		0,
 	);
 	const scoredTeams = standings.filter((s) => s.best_round > 0).length;
 
 	async function handleAdvanceTeams() {
 		if (topTeams.length < advanceCount) {
-			setAdvanceError(`Only ${topTeams.length} teams have scores. Need at least ${advanceCount} to advance.`);
+			setAdvanceError(
+				`Only ${topTeams.length} teams have scores. Need at least ${advanceCount} to advance.`,
+			);
 			return;
 		}
 		if (bracketAlreadyExists) {
-			setAdvanceError(`${targetPhase} already has ${elimByPhase[targetPhase].length} match row(s). Delete them in Supabase first to re-seed.`);
+			setAdvanceError(
+				`${targetPhase} already has ${elimByPhase[targetPhase].length} match row(s). Delete them in Supabase first to re-seed.`,
+			);
 			return;
 		}
 
@@ -372,7 +529,9 @@ export function AdminPage() {
 		if (error) {
 			setAdvanceError(error.message);
 		} else {
-			setAdvanceSuccess(`${advanceCount} teams seeded into ${targetPhase}.`);
+			setAdvanceSuccess(
+				`${advanceCount} teams seeded into ${targetPhase}.`,
+			);
 			setShowSeedPreview(false);
 			loadData();
 			setActiveTab("bracket");
@@ -384,18 +543,24 @@ export function AdminPage() {
 		const unconfirmed = phaseMatches.filter((m) => !m.winner_id);
 
 		if (unconfirmed.length > 0) {
-			alert(`${unconfirmed.length} match(es) in ${fromPhase} still need a confirmed winner.`);
+			alert(
+				`${unconfirmed.length} match(es) in ${fromPhase} still need a confirmed winner.`,
+			);
 			return;
 		}
 
 		const toPhase = nextPhaseFor(fromPhase);
 		if (!toPhase) return;
 		if ((elimByPhase[toPhase]?.length ?? 0) > 0) {
-			alert(`${toPhase} already has matches. Delete them in Supabase to re-seed.`);
+			alert(
+				`${toPhase} already has matches. Delete them in Supabase to re-seed.`,
+			);
 			return;
 		}
 
-		const sorted = [...phaseMatches].sort((a, b) => a.match_order - b.match_order);
+		const sorted = [...phaseMatches].sort(
+			(a, b) => a.match_order - b.match_order,
+		);
 		const rows: object[] = [];
 
 		for (let i = 0; i + 1 < sorted.length; i += 2) {
@@ -423,19 +588,28 @@ export function AdminPage() {
 		}
 
 		const { error } = await supabase.from("matches").insert(rows);
-		if (error) { alert(`Advance failed: ${error.message}`); }
-		else { loadData(); }
+		if (error) {
+			alert(`Advance failed: ${error.message}`);
+		} else {
+			loadData();
+		}
 	}
 
 	async function handleSetWinner(matchId: string, winnerId: string) {
 		setWinnerConfirming(matchId);
-		const { error } = await supabase.from("matches").update({ winner_id: winnerId }).eq("id", matchId);
+		const { error } = await supabase
+			.from("matches")
+			.update({ winner_id: winnerId })
+			.eq("id", matchId);
 		setWinnerConfirming(null);
 		setOverrideMatchId(null);
-		if (error) { alert(`Could not set winner: ${error.message}`); }
-		else {
+		if (error) {
+			alert(`Could not set winner: ${error.message}`);
+		} else {
 			setElimMatches((prev) =>
-				prev.map((m) => m.id === matchId ? { ...m, winner_id: winnerId } : m),
+				prev.map((m) =>
+					m.id === matchId ? { ...m, winner_id: winnerId } : m,
+				),
 			);
 		}
 	}
@@ -444,19 +618,27 @@ export function AdminPage() {
 
 	return (
 		<div className="min-h-screen bg-editorial-bg text-editorial-ink font-sans">
-
 			{/* Sticky header: top bar + tab bar */}
 			<div className="sticky top-0 z-20">
 				{/* Top bar */}
 				<div className="bg-editorial-ink text-white border-b border-white/10 px-4 py-3 flex items-center gap-3 flex-wrap">
-					<Trophy size={15} className="text-editorial-gold shrink-0" />
-					<span className="text-xs font-black uppercase tracking-widest mr-auto">Admin Dashboard</span>
+					<Trophy
+						size={15}
+						className="text-editorial-gold shrink-0"
+					/>
+					<span className="text-xs font-black uppercase tracking-widest mr-auto">
+						Admin Dashboard
+					</span>
 
 					<div className="flex border border-white/20">
 						{(["Junior", "Senior"] as Category[]).map((c) => (
-							<button key={c} onClick={() => setCategory(c)}
+							<button
+								key={c}
+								onClick={() => setCategory(c)}
 								className={`px-4 py-1.5 text-xs font-black uppercase tracking-widest transition-colors ${
-									category === c ? "bg-editorial-gold text-editorial-ink" : "text-white/60 hover:text-white"
+									category === c
+										? "bg-editorial-gold text-editorial-ink"
+										: "text-white/60 hover:text-white"
 								}`}
 							>
 								{c}
@@ -464,17 +646,35 @@ export function AdminPage() {
 						))}
 					</div>
 
-					<button onClick={loadData} className="p-1.5 hover:text-editorial-gold transition-colors" title="Refresh">
-						<RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
+					<button
+						onClick={loadData}
+						className="p-1.5 hover:text-editorial-gold transition-colors"
+						title="Refresh"
+					>
+						<RefreshCw
+							size={14}
+							className={isLoading ? "animate-spin" : ""}
+						/>
 					</button>
-					<a href="/scorekeeper" className="text-xs text-white/60 hover:text-editorial-gold transition-colors uppercase tracking-widest">
+					<a
+						href="/scorekeeper"
+						className="text-xs text-white/60 hover:text-editorial-gold transition-colors uppercase tracking-widest"
+					>
 						Scores
 					</a>
-					<a href="/" className="text-xs text-white/60 hover:text-editorial-gold transition-colors uppercase tracking-widest">
+					<a
+						href="/"
+						className="text-xs text-white/60 hover:text-editorial-gold transition-colors uppercase tracking-widest"
+					>
 						Live
 					</a>
-					<button onClick={async () => { await signOut(); navigate("/login"); }}
-						className="p-1.5 hover:text-editorial-gold transition-colors">
+					<button
+						onClick={async () => {
+							await signOut();
+							navigate("/login");
+						}}
+						className="p-1.5 hover:text-editorial-gold transition-colors"
+					>
 						<LogOut size={14} />
 					</button>
 				</div>
@@ -520,10 +720,11 @@ export function AdminPage() {
 			</div>
 
 			{isLoading ? (
-				<div className="py-20 text-center text-sm text-gray-400">Loading…</div>
+				<div className="py-20 text-center text-sm text-gray-400">
+					Loading…
+				</div>
 			) : (
 				<div className="w-full px-4 py-6 space-y-3">
-
 					{/* ─ QUALIFIERS TAB ─────────────────────────────────────── */}
 					{activeTab === "qualifiers" && (
 						<>
@@ -538,7 +739,9 @@ export function AdminPage() {
 									<>
 										<span className="text-gray-200">·</span>
 										<button
-											onClick={() => setActiveTab("bracket")}
+											onClick={() =>
+												setActiveTab("bracket")
+											}
 											className="text-editorial-gold hover:underline"
 										>
 											Bracket → {targetPhase}
@@ -548,9 +751,15 @@ export function AdminPage() {
 								<div className="ml-auto">
 									<LockControl
 										phase="Qualifiers"
-										lockType={phaseLocks["Qualifiers"] ?? null}
-										onLock={(lt) => handleLockPhase("Qualifiers", lt)}
-										onUnlock={() => handleUnlockPhase("Qualifiers")}
+										lockType={
+											phaseLocks["Qualifiers"] ?? null
+										}
+										onLock={(lt) =>
+											handleLockPhase("Qualifiers", lt)
+										}
+										onUnlock={() =>
+											handleUnlockPhase("Qualifiers")
+										}
 									/>
 								</div>
 							</div>
@@ -564,40 +773,69 @@ export function AdminPage() {
 								<div className="p-5 space-y-4">
 									<div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_100px_auto] gap-3 items-end">
 										<div className="space-y-1">
-											<label className="text-[10px] font-black uppercase tracking-widest">Team 1</label>
+											<label className="text-[10px] font-black uppercase tracking-widest">
+												Team 1
+											</label>
 											<select
 												value={newTeam1}
-												onChange={(e) => setNewTeam1(e.target.value)}
+												onChange={(e) =>
+													setNewTeam1(e.target.value)
+												}
 												className="w-full border-2 border-editorial-ink px-2 py-2 text-sm bg-editorial-bg focus:outline-none focus:border-editorial-gold"
 											>
-												<option value="">Select team…</option>
+												<option value="">
+													Select team…
+												</option>
 												{allTeams.map((t) => (
-													<option key={t.id} value={t.id}>{t.team_name}</option>
+													<option
+														key={t.id}
+														value={t.id}
+													>
+														{t.team_name}
+													</option>
 												))}
 											</select>
 										</div>
 										<div className="space-y-1">
-											<label className="text-[10px] font-black uppercase tracking-widest">Team 2</label>
+											<label className="text-[10px] font-black uppercase tracking-widest">
+												Team 2
+											</label>
 											<select
 												value={newTeam2}
-												onChange={(e) => setNewTeam2(e.target.value)}
+												onChange={(e) =>
+													setNewTeam2(e.target.value)
+												}
 												className="w-full border-2 border-editorial-ink px-2 py-2 text-sm bg-editorial-bg focus:outline-none focus:border-editorial-gold"
 											>
-												<option value="">Select team…</option>
+												<option value="">
+													Select team…
+												</option>
 												{allTeams
-													.filter((t) => t.id !== newTeam1)
+													.filter(
+														(t) =>
+															t.id !== newTeam1,
+													)
 													.map((t) => (
-														<option key={t.id} value={t.id}>{t.team_name}</option>
+														<option
+															key={t.id}
+															value={t.id}
+														>
+															{t.team_name}
+														</option>
 													))}
 											</select>
 										</div>
 										<div className="space-y-1">
-											<label className="text-[10px] font-black uppercase tracking-widest">Table #</label>
+											<label className="text-[10px] font-black uppercase tracking-widest">
+												Table #
+											</label>
 											<input
 												type="number"
 												min={1}
 												value={newTable}
-												onChange={(e) => setNewTable(e.target.value)}
+												onChange={(e) =>
+													setNewTable(e.target.value)
+												}
 												placeholder="e.g. 1"
 												className="w-full border-2 border-editorial-ink px-2 py-2 text-sm bg-editorial-bg focus:outline-none focus:border-editorial-gold [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
 											/>
@@ -608,19 +846,25 @@ export function AdminPage() {
 											className="border-2 border-editorial-ink bg-editorial-gold text-editorial-ink px-4 py-2 text-xs font-black uppercase tracking-widest hover:bg-editorial-ink hover:text-white transition-colors disabled:opacity-50 flex items-center gap-1.5 whitespace-nowrap shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]"
 										>
 											<Plus size={13} />
-											{isCreating ? "Adding…" : "Add Match"}
+											{isCreating
+												? "Adding…"
+												: "Add Match"}
 										</button>
 									</div>
 
 									{createError && (
 										<p className="text-xs text-red-600 flex items-center gap-1.5">
-											<AlertCircle size={12} /> {createError}
+											<AlertCircle size={12} />{" "}
+											{createError}
 										</p>
 									)}
 
 									<div className="pt-2 border-t border-gray-100 flex items-center justify-between gap-3 flex-wrap">
 										<p className="text-xs text-gray-400">
-											Pair all {allTeams.length} teams into {Math.floor(allTeams.length / 2)} matches automatically
+											Pair all {allTeams.length} teams
+											into{" "}
+											{Math.floor(allTeams.length / 2)}{" "}
+											matches automatically
 										</p>
 										<button
 											onClick={handleAutoGenerate}
@@ -641,34 +885,56 @@ export function AdminPage() {
 							>
 								{qualifierMatches.length === 0 ? (
 									<div className="p-6 text-center text-sm text-gray-400">
-										No matches yet. Add one above or use auto-generate.
+										No matches yet. Add one above or use
+										auto-generate.
 									</div>
 								) : (
 									<div>
 										<div className="bg-editorial-ink/5 px-3 py-1.5 flex items-center border-b border-gray-100">
-											<span className="text-[10px] font-black uppercase tracking-widest text-gray-400 flex-1">Teams</span>
-											<span className="text-[10px] font-black uppercase tracking-widest text-gray-400 w-12 text-center">Table</span>
+											<span className="text-[10px] font-black uppercase tracking-widest text-gray-400 flex-1">
+												Teams
+											</span>
+											<span className="text-[10px] font-black uppercase tracking-widest text-gray-400 w-12 text-center">
+												Table
+											</span>
 											<span className="w-8" />
 										</div>
 										{qualifierMatches.map((m, i) => (
-											<div key={m.id}
+											<div
+												key={m.id}
 												className={`flex items-center gap-3 px-3 py-2.5 border-b border-gray-100 text-sm last:border-b-0 ${
-													i % 2 === 0 ? "bg-white" : "bg-editorial-bg/30"
+													i % 2 === 0
+														? "bg-white"
+														: "bg-editorial-bg/30"
 												}`}
 											>
-												<span className="text-[10px] font-black text-gray-300 w-5 shrink-0">{i + 1}</span>
-												<span className="flex-1 font-semibold truncate">
-													{m.team_1?.team_name ?? <em className="text-gray-400">TBD</em>}
+												<span className="text-[10px] font-black text-gray-300 w-5 shrink-0">
+													{i + 1}
 												</span>
-												<span className="text-xs text-gray-300 shrink-0">vs</span>
+												<span className="flex-1 font-semibold truncate">
+													{m.team_1?.team_name ?? (
+														<em className="text-gray-400">
+															TBD
+														</em>
+													)}
+												</span>
+												<span className="text-xs text-gray-300 shrink-0">
+													vs
+												</span>
 												<span className="flex-1 font-semibold truncate text-right">
-													{m.team_2?.team_name ?? <em className="text-gray-400">TBD</em>}
+													{m.team_2?.team_name ?? (
+														<em className="text-gray-400">
+															TBD
+														</em>
+													)}
 												</span>
 												<span className="text-xs text-gray-400 font-mono w-12 text-center shrink-0">
 													{m.table_number ?? "—"}
 												</span>
 												<button
-													onClick={() => handleDeleteMatch(m.id)}
+													onClick={() =>
+														handleDeleteMatch(m.id)
+													}
 													className="p-1 text-gray-300 hover:text-red-500 transition-colors shrink-0"
 													title="Delete match"
 												>
@@ -688,10 +954,15 @@ export function AdminPage() {
 							>
 								{standings.length === 0 ? (
 									<div className="p-6 text-center text-sm text-gray-400">
-										No qualifier scores yet. Scorekeepers can enter scores at /scorekeeper once matches are created.
+										No qualifier scores yet. Scorekeepers
+										can enter scores at /scorekeeper once
+										matches are created.
 									</div>
 								) : (
-									<StandingsTable standings={standings} advanceCount={advanceCount} />
+									<StandingsTable
+										standings={standings}
+										advanceCount={advanceCount}
+									/>
 								)}
 							</CollapsiblePanel>
 
@@ -704,13 +975,23 @@ export function AdminPage() {
 							>
 								<div className="p-5 space-y-5">
 									<div className="flex items-center gap-4 flex-wrap">
-										<span className="text-xs font-black uppercase tracking-widest">Advance top</span>
+										<span className="text-xs font-black uppercase tracking-widest">
+											Advance top
+										</span>
 										<div className="flex border-2 border-editorial-ink">
 											{ADVANCE_OPTIONS.map((n) => (
-												<button key={n}
-													onClick={() => { setAdvanceCount(n); setShowSeedPreview(false); }}
+												<button
+													key={n}
+													onClick={() => {
+														setAdvanceCount(n);
+														setShowSeedPreview(
+															false,
+														);
+													}}
 													className={`px-5 py-2 text-sm font-black transition-colors ${
-														advanceCount === n ? "bg-editorial-ink text-white" : "bg-white text-editorial-ink hover:bg-editorial-gold/20"
+														advanceCount === n
+															? "bg-editorial-ink text-white"
+															: "bg-white text-editorial-ink hover:bg-editorial-gold/20"
 													}`}
 												>
 													{n}
@@ -718,7 +999,10 @@ export function AdminPage() {
 											))}
 										</div>
 										<span className="text-xs font-black uppercase tracking-widest">
-											teams → <span className="text-editorial-gold">{targetPhase}</span>
+											teams →{" "}
+											<span className="text-editorial-gold">
+												{targetPhase}
+											</span>
 										</span>
 									</div>
 
@@ -726,11 +1010,19 @@ export function AdminPage() {
 										<div className="flex items-center justify-between gap-3 bg-editorial-green/8 border border-editorial-green/30 px-4 py-3">
 											<div>
 												<p className="text-xs font-black text-editorial-green uppercase tracking-wider">
-													{targetPhase} already seeded — {elimByPhase[targetPhase].length} match(es)
+													{targetPhase} already seeded
+													—{" "}
+													{
+														elimByPhase[targetPhase]
+															.length
+													}{" "}
+													match(es)
 												</p>
 											</div>
 											<button
-												onClick={() => setActiveTab("bracket")}
+												onClick={() =>
+													setActiveTab("bracket")
+												}
 												className="text-xs font-semibold text-editorial-green border border-editorial-green px-3 py-1.5 hover:bg-editorial-green hover:text-white transition-colors whitespace-nowrap shrink-0"
 											>
 												Go to Bracket →
@@ -739,28 +1031,49 @@ export function AdminPage() {
 									) : (
 										<>
 											<div className="bg-editorial-ink/5 border-l-4 border-editorial-gold px-4 py-2 text-xs text-gray-600">
-												<strong className="font-black text-editorial-ink">Seeding:</strong>{" "}
+												<strong className="font-black text-editorial-ink">
+													Seeding:
+												</strong>{" "}
 												{advanceCount === 16
 													? "1v16, 8v9, 4v13, 5v12, 2v15, 7v10, 3v14, 6v11 — seeds 1 & 2 cannot meet before the Final."
 													: advanceCount === 8
-													? "1v8, 4v5, 2v7, 3v6 — seeds 1 & 2 cannot meet before the Final."
-													: "1v4, 2v3 — seeds 1 & 2 meet only in the Final."}
+														? "1v8, 4v5, 2v7, 3v6 — seeds 1 & 2 cannot meet before the Final."
+														: "1v4, 2v3 — seeds 1 & 2 meet only in the Final."}
 											</div>
 
-											<button onClick={() => setShowSeedPreview((v) => !v)}
+											<button
+												onClick={() =>
+													setShowSeedPreview(
+														(v) => !v,
+													)
+												}
 												className="flex items-center gap-2 text-xs font-semibold text-gray-500 hover:text-editorial-ink transition-colors"
 											>
-												<ChevronRight size={14} className={`transition-transform ${showSeedPreview ? "rotate-90" : ""}`} />
-												{showSeedPreview ? "Hide" : "Show"} seeding preview
+												<ChevronRight
+													size={14}
+													className={`transition-transform ${showSeedPreview ? "rotate-90" : ""}`}
+												/>
+												{showSeedPreview
+													? "Hide"
+													: "Show"}{" "}
+												seeding preview
 											</button>
 
 											{showSeedPreview && (
-												<SeedPreview pairings={pairings} topTeams={topTeams} targetPhase={targetPhase} />
+												<SeedPreview
+													pairings={pairings}
+													topTeams={topTeams}
+													targetPhase={targetPhase}
+												/>
 											)}
 
 											{advanceError && (
 												<div className="flex items-start gap-2 bg-red-50 border border-red-200 p-3 text-xs text-red-700">
-													<AlertCircle size={13} className="mt-0.5 shrink-0" /> {advanceError}
+													<AlertCircle
+														size={13}
+														className="mt-0.5 shrink-0"
+													/>{" "}
+													{advanceError}
 												</div>
 											)}
 											{advanceSuccess && (
@@ -772,16 +1085,26 @@ export function AdminPage() {
 											<div className="flex items-center gap-3 flex-wrap">
 												<button
 													onClick={handleAdvanceTeams}
-													disabled={isAdvancing || standings.length < advanceCount}
+													disabled={
+														isAdvancing ||
+														standings.length <
+															advanceCount
+													}
 													className="border-2 border-editorial-ink bg-editorial-gold text-editorial-ink px-6 py-2.5 text-xs font-black uppercase tracking-widest hover:bg-editorial-ink hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-[3px_3px_0px_0px_rgba(26,26,26,1)]"
 												>
-													{isAdvancing ? "Seeding…" : `Advance ${advanceCount} Teams →`}
+													{isAdvancing
+														? "Seeding…"
+														: `Advance ${advanceCount} Teams →`}
 												</button>
-												{standings.length < advanceCount && standings.length > 0 && (
-													<p className="text-xs text-gray-400">
-														{standings.length} / {advanceCount} teams scored
-													</p>
-												)}
+												{standings.length <
+													advanceCount &&
+													standings.length > 0 && (
+														<p className="text-xs text-gray-400">
+															{standings.length} /{" "}
+															{advanceCount} teams
+															scored
+														</p>
+													)}
 											</div>
 										</>
 									)}
@@ -795,9 +1118,13 @@ export function AdminPage() {
 						<>
 							{activeBracketPhases.length === 0 ? (
 								<div className="py-16 text-center space-y-3">
-									<p className="text-sm text-gray-400">No bracket matches yet.</p>
+									<p className="text-sm text-gray-400">
+										No bracket matches yet.
+									</p>
 									<button
-										onClick={() => setActiveTab("qualifiers")}
+										onClick={() =>
+											setActiveTab("qualifiers")
+										}
 										className="text-xs font-semibold text-editorial-ink border-2 border-editorial-ink px-4 py-2 hover:bg-editorial-gold transition-colors"
 									>
 										← Go to Qualifiers to advance teams
@@ -807,61 +1134,128 @@ export function AdminPage() {
 								<>
 									{/* Bracket stats strip */}
 									<div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-gray-400 px-1 pb-1 flex-wrap">
-										<span>{activeBracketPhases.length} active phase{activeBracketPhases.length !== 1 ? "s" : ""}</span>
+										<span>
+											{activeBracketPhases.length} active
+											phase
+											{activeBracketPhases.length !== 1
+												? "s"
+												: ""}
+										</span>
 										{pendingWinners > 0 && (
 											<>
-												<span className="text-gray-200">·</span>
-												<span className="text-amber-600">{pendingWinners} pending winner{pendingWinners !== 1 ? "s" : ""}</span>
+												<span className="text-gray-200">
+													·
+												</span>
+												<span className="text-amber-600">
+													{pendingWinners} pending
+													winner
+													{pendingWinners !== 1
+														? "s"
+														: ""}
+												</span>
 											</>
 										)}
 										{pendingWinners === 0 && (
 											<>
-												<span className="text-gray-200">·</span>
-												<span className="text-editorial-green">All confirmed ✓</span>
+												<span className="text-gray-200">
+													·
+												</span>
+												<span className="text-editorial-green">
+													All confirmed ✓
+												</span>
 											</>
 										)}
 									</div>
 
 									{/* Phase accordions (main phases except Third Place) */}
-									{ELIM_PHASES
-										.filter((p) => p !== "Third Place" && (elimByPhase[p]?.length ?? 0) > 0)
-										.map((phase) => (
-											<PhaseAccordion
-												key={phase}
-												phase={phase}
-												matches={elimByPhase[phase] ?? []}
-												thirdPlaceMatches={phase === "Semifinals" ? (elimByPhase["Third Place"] ?? []) : []}
-												overrideMatchId={overrideMatchId}
-												winnerConfirming={winnerConfirming}
-												lockType={phaseLocks[phase] ?? null}
-												onSetWinner={handleSetWinner}
-												onToggleOverride={setOverrideMatchId}
-												onAdvanceWinners={nextPhaseFor(phase) ? () => handleAdvanceWinners(phase) : undefined}
-												canAdvance={(elimByPhase[nextPhaseFor(phase)!]?.length ?? 0) === 0}
-												onLock={(lt) => handleLockPhase(phase, lt)}
-												onUnlock={() => handleUnlockPhase(phase)}
-											/>
-										))}
-
-									{/* Third Place standalone (only shown when Finals exists too) */}
-									{(elimByPhase["Third Place"]?.length ?? 0) > 0 &&
-										(elimByPhase["Finals"]?.length ?? 0) > 0 && (
+									{ELIM_PHASES.filter(
+										(p) =>
+											p !== "Third Place" &&
+											(elimByPhase[p]?.length ?? 0) > 0,
+									).map((phase) => (
 										<PhaseAccordion
-											key="Third Place"
-											phase="Third Place"
-											matches={elimByPhase["Third Place"] ?? []}
-											thirdPlaceMatches={[]}
+											key={phase}
+											phase={phase}
+											matches={elimByPhase[phase] ?? []}
+											thirdPlaceMatches={
+												phase === "Semifinals"
+													? (elimByPhase[
+															"Third Place"
+														] ?? [])
+													: []
+											}
 											overrideMatchId={overrideMatchId}
 											winnerConfirming={winnerConfirming}
-											lockType={phaseLocks["Third Place"] ?? null}
+											lockType={phaseLocks[phase] ?? null}
 											onSetWinner={handleSetWinner}
-											onToggleOverride={setOverrideMatchId}
-											onAdvanceWinners={undefined}
-											canAdvance={false}
-											onLock={(lt) => handleLockPhase("Third Place", lt)}
-											onUnlock={() => handleUnlockPhase("Third Place")}
+											onToggleOverride={
+												setOverrideMatchId
+											}
+											onAdvanceWinners={
+												nextPhaseFor(phase)
+													? () =>
+															handleAdvanceWinners(
+																phase,
+															)
+													: undefined
+											}
+											canAdvance={
+												(elimByPhase[
+													nextPhaseFor(phase)!
+												]?.length ?? 0) === 0
+											}
+											onLock={(lt) =>
+												handleLockPhase(phase, lt)
+											}
+											onUnlock={() =>
+												handleUnlockPhase(phase)
+											}
 										/>
-									)}
+									))}
+
+									{/* Third Place standalone (only shown when Finals exists too) */}
+									{(elimByPhase["Third Place"]?.length ?? 0) >
+										0 &&
+										(elimByPhase["Finals"]?.length ?? 0) >
+											0 && (
+											<PhaseAccordion
+												key="Third Place"
+												phase="Third Place"
+												matches={
+													elimByPhase[
+														"Third Place"
+													] ?? []
+												}
+												thirdPlaceMatches={[]}
+												overrideMatchId={
+													overrideMatchId
+												}
+												winnerConfirming={
+													winnerConfirming
+												}
+												lockType={
+													phaseLocks["Third Place"] ??
+													null
+												}
+												onSetWinner={handleSetWinner}
+												onToggleOverride={
+													setOverrideMatchId
+												}
+												onAdvanceWinners={undefined}
+												canAdvance={false}
+												onLock={(lt) =>
+													handleLockPhase(
+														"Third Place",
+														lt,
+													)
+												}
+												onUnlock={() =>
+													handleUnlockPhase(
+														"Third Place",
+													)
+												}
+											/>
+										)}
 								</>
 							)}
 						</>
@@ -869,7 +1263,10 @@ export function AdminPage() {
 
 					{/* ─ TEAMS TAB ──────────────────────────────────────────── */}
 					{activeTab === "teams" && (
-						<TeamsTab category={category} onTeamsChanged={loadData} />
+						<TeamsTab
+							category={category}
+							onTeamsChanged={loadData}
+						/>
 					)}
 				</div>
 			)}
@@ -879,7 +1276,13 @@ export function AdminPage() {
 
 // ─── TeamsTab ─────────────────────────────────────────────────────────────────
 
-function TeamsTab({ category, onTeamsChanged }: { category: Category; onTeamsChanged: () => void }) {
+function TeamsTab({
+	category,
+	onTeamsChanged,
+}: {
+	category: Category;
+	onTeamsChanged: () => void;
+}) {
 	const teamsResize = useEdgeColumnResize({
 		columnCount: 6,
 		minColumnWidth: 56,
@@ -894,27 +1297,37 @@ function TeamsTab({ category, onTeamsChanged }: { category: Category; onTeamsCha
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [editDraft, setEditDraft] = useState<Partial<Team>>({});
 	const [editError, setEditError] = useState<string | null>(null);
-	const [bulkRows, setBulkRows] = useState<BulkRow[]>(() => Array.from({ length: 5 }, () => makeEmptyBulkRow(category)));
+	const [bulkRows, setBulkRows] = useState<BulkRow[]>(() =>
+		Array.from({ length: 5 }, () => makeEmptyBulkRow(category)),
+	);
 	const [bulkSaving, setBulkSaving] = useState(false);
 	const [bulkError, setBulkError] = useState<string | null>(null);
 	const [bulkSuccess, setBulkSuccess] = useState<string | null>(null);
-	const [panelTeamsOpen, setPanelTeamsOpen] = useState(true);
-	const [panelBulkOpen, setPanelBulkOpen] = useState(true);
+	const [panelTeamsOpen, setPanelTeamsOpen] = useState(false);
+	const [panelBulkOpen, setPanelBulkOpen] = useState(false);
 	const fileRef = useRef<HTMLInputElement>(null);
 
 	async function loadTeams() {
 		setIsLoading(true);
-		const { data } = await supabase.from("teams").select("*").eq("category", category).order("team_name");
+		const { data } = await supabase
+			.from("teams")
+			.select("*")
+			.eq("category", category)
+			.order("team_name");
 		setTeams((data as Team[]) ?? []);
 		setIsLoading(false);
 	}
 
-	useEffect(() => { loadTeams(); }, [category]);
+	useEffect(() => {
+		loadTeams();
+	}, [category]);
 
 	// Reset bulk row category defaults when category prop changes
 	useEffect(() => {
 		setBulkRows((rows) =>
-			rows.map((r) => (!r.team_name && !bulkRowHasData(r)) ? { ...r, category } : r),
+			rows.map((r) =>
+				!r.team_name && !bulkRowHasData(r) ? { ...r, category } : r,
+			),
 		);
 	}, [category]);
 
@@ -922,26 +1335,50 @@ function TeamsTab({ category, onTeamsChanged }: { category: Category; onTeamsCha
 
 	async function handleSaveEdit() {
 		if (!editingId) return;
-		if (!editDraft.team_name?.trim()) { setEditError("Team name is required."); return; }
-		const membersRaw = typeof editDraft.team_members === "string"
-			? (editDraft.team_members as unknown as string).split(",").map((s) => s.trim()).filter(Boolean)
-			: (editDraft.team_members ?? null);
-		const { error } = await supabase.from("teams").update({
-			team_name: editDraft.team_name.trim(),
-			country: editDraft.country || null,
-			coach_name: editDraft.coach_name || null,
-			team_members: membersRaw?.length ? membersRaw : null,
-			team_description: editDraft.team_description || null,
-		}).eq("id", editingId);
-		if (error) { setEditError(error.message); return; }
-		setEditingId(null); setEditDraft({}); setEditError(null);
-		loadTeams(); onTeamsChanged();
+		if (!editDraft.team_name?.trim()) {
+			setEditError("Team name is required.");
+			return;
+		}
+		const membersRaw =
+			typeof editDraft.team_members === "string"
+				? (editDraft.team_members as unknown as string)
+						.split(",")
+						.map((s) => s.trim())
+						.filter(Boolean)
+				: (editDraft.team_members ?? null);
+		const { error } = await supabase
+			.from("teams")
+			.update({
+				team_name: editDraft.team_name.trim(),
+				country: editDraft.country || null,
+				coach_name: editDraft.coach_name || null,
+				team_members: membersRaw?.length ? membersRaw : null,
+				team_description: editDraft.team_description || null,
+			})
+			.eq("id", editingId);
+		if (error) {
+			setEditError(error.message);
+			return;
+		}
+		setEditingId(null);
+		setEditDraft({});
+		setEditError(null);
+		loadTeams();
+		onTeamsChanged();
 	}
 
 	async function handleDelete(id: string, name: string) {
-		if (!confirm(`Delete "${name}"? This cannot be undone and will affect any matches using this team.`)) return;
+		if (
+			!confirm(
+				`Delete "${name}"? This cannot be undone and will affect any matches using this team.`,
+			)
+		)
+			return;
 		const { error } = await supabase.from("teams").delete().eq("id", id);
-		if (!error) { loadTeams(); onTeamsChanged(); }
+		if (!error) {
+			loadTeams();
+			onTeamsChanged();
+		}
 	}
 
 	// ── Bulk add ────────────────────────────────────────────────────────────────
@@ -959,7 +1396,11 @@ function TeamsTab({ category, onTeamsChanged }: { category: Category; onTeamsCha
 		setBulkSuccess(null);
 	}
 
-	function handleBulkKeyDown(e: React.KeyboardEvent, rowIndex: number, colIndex: number) {
+	function handleBulkKeyDown(
+		e: React.KeyboardEvent,
+		rowIndex: number,
+		colIndex: number,
+	) {
 		const totalRows = bulkRows.length;
 		if (e.key === "Tab") {
 			e.preventDefault();
@@ -982,9 +1423,16 @@ function TeamsTab({ category, onTeamsChanged }: { category: Category; onTeamsCha
 		reader.onload = (ev) => {
 			const text = ev.target?.result as string;
 			const parsed = parseCSV(text, category);
-			if (parsed.length === 0) { setBulkError("No valid rows found in CSV. Check headers: team_name, category, country, coach_name, team_members, team_description"); return; }
+			if (parsed.length === 0) {
+				setBulkError(
+					"No valid rows found in CSV. Check headers: team_name, category, country, coach_name, team_members, team_description",
+				);
+				return;
+			}
 			setBulkRows((prev) => {
-				const nonEmpty = prev.filter((r) => r.team_name.trim() || bulkRowHasData(r));
+				const nonEmpty = prev.filter(
+					(r) => r.team_name.trim() || bulkRowHasData(r),
+				);
 				return [...nonEmpty, ...parsed, makeEmptyBulkRow(category)];
 			});
 			setBulkError(null);
@@ -995,24 +1443,37 @@ function TeamsTab({ category, onTeamsChanged }: { category: Category; onTeamsCha
 
 	async function handleBulkSubmit() {
 		const valid = bulkRows.filter((r) => r.team_name.trim());
-		if (valid.length === 0) { setBulkError("No rows with team names to save."); return; }
-		setBulkSaving(true); setBulkError(null);
+		if (valid.length === 0) {
+			setBulkError("No rows with team names to save.");
+			return;
+		}
+		setBulkSaving(true);
+		setBulkError(null);
 		const rows = valid.map((r) => ({
 			team_name: r.team_name.trim(),
 			category: r.category,
 			country: r.country.trim() || null,
 			coach_name: r.coach_name.trim() || null,
 			team_members: r.team_members.trim()
-				? r.team_members.split(",").map((s) => s.trim()).filter(Boolean)
+				? r.team_members
+						.split(",")
+						.map((s) => s.trim())
+						.filter(Boolean)
 				: null,
 			team_description: r.team_description.trim() || null,
 		}));
 		const { error } = await supabase.from("teams").insert(rows);
 		setBulkSaving(false);
-		if (error) { setBulkError(error.message); return; }
+		if (error) {
+			setBulkError(error.message);
+			return;
+		}
 		setBulkSuccess(`${valid.length} team(s) added successfully.`);
-		setBulkRows(Array.from({ length: 5 }, () => makeEmptyBulkRow(category)));
-		loadTeams(); onTeamsChanged();
+		setBulkRows(
+			Array.from({ length: 5 }, () => makeEmptyBulkRow(category)),
+		);
+		loadTeams();
+		onTeamsChanged();
 	}
 
 	// ── Render ──────────────────────────────────────────────────────────────────
@@ -1024,7 +1485,10 @@ function TeamsTab({ category, onTeamsChanged }: { category: Category; onTeamsCha
 			{/* Stats strip */}
 			<div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest text-gray-400 px-1 pb-1 flex-wrap">
 				<Users size={11} />
-				<span>{teams.length} {category} team{teams.length !== 1 ? "s" : ""} registered</span>
+				<span>
+					{teams.length} {category} team
+					{teams.length !== 1 ? "s" : ""} registered
+				</span>
 			</div>
 
 			{/* Existing teams */}
@@ -1034,9 +1498,13 @@ function TeamsTab({ category, onTeamsChanged }: { category: Category; onTeamsCha
 				onToggle={() => setPanelTeamsOpen((v) => !v)}
 			>
 				{isLoading ? (
-					<div className="p-6 text-center text-sm text-gray-400">Loading…</div>
+					<div className="p-6 text-center text-sm text-gray-400">
+						Loading…
+					</div>
 				) : teams.length === 0 ? (
-					<div className="p-6 text-center text-sm text-gray-400">No {category} teams yet. Add some below.</div>
+					<div className="p-6 text-center text-sm text-gray-400">
+						No {category} teams yet. Add some below.
+					</div>
 				) : (
 					<div className="overflow-x-auto">
 						<table
@@ -1045,17 +1513,32 @@ function TeamsTab({ category, onTeamsChanged }: { category: Category; onTeamsCha
 						>
 							<colgroup>
 								{Array.from({ length: 6 }, (_, i) => (
-									<col key={i} style={teamsResize.getColumnStyle(i)} />
+									<col
+										key={i}
+										style={teamsResize.getColumnStyle(i)}
+									/>
 								))}
 							</colgroup>
 							<thead>
 								<tr className="bg-editorial-ink text-white text-[10px] uppercase tracking-widest">
-									<th className="px-3 py-2 text-left font-black w-8">#</th>
-									<th className="px-3 py-2 text-left font-black min-w-[160px]">Team Name</th>
-									<th className="px-3 py-2 text-left font-black w-28">Country</th>
-									<th className="px-3 py-2 text-left font-black w-36">Coach</th>
-									<th className="px-3 py-2 text-left font-black w-44">Members</th>
-									<th className="px-2 py-2 text-center font-black w-20">Actions</th>
+									<th className="px-3 py-2 text-left font-black w-8">
+										#
+									</th>
+									<th className="px-3 py-2 text-left font-black min-w-[160px]">
+										Team Name
+									</th>
+									<th className="px-3 py-2 text-left font-black w-28">
+										Country
+									</th>
+									<th className="px-3 py-2 text-left font-black w-36">
+										Coach
+									</th>
+									<th className="px-3 py-2 text-left font-black w-44">
+										Members
+									</th>
+									<th className="px-2 py-2 text-center font-black w-20">
+										Actions
+									</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -1064,47 +1547,125 @@ function TeamsTab({ category, onTeamsChanged }: { category: Category; onTeamsCha
 									const rowClass = `border-b border-gray-100 ${i % 2 === 0 ? "bg-white" : "bg-editorial-bg/50"}`;
 									return (
 										<tr key={team.id} className={rowClass}>
-											<td className="px-3 py-2 text-[10px] text-gray-300 font-mono">{i + 1}</td>
+											<td className="px-3 py-2 text-[10px] text-gray-300 font-mono">
+												{i + 1}
+											</td>
 											{isEditing ? (
 												<>
 													<td className="px-2 py-1.5">
 														<input
 															autoFocus
-															value={editDraft.team_name ?? ""}
-															onChange={(e) => setEditDraft((d) => ({ ...d, team_name: e.target.value }))}
+															value={
+																editDraft.team_name ??
+																""
+															}
+															onChange={(e) =>
+																setEditDraft(
+																	(d) => ({
+																		...d,
+																		team_name:
+																			e
+																				.target
+																				.value,
+																	}),
+																)
+															}
 															className="w-full border-2 border-editorial-ink px-2 py-1 text-sm font-semibold focus:outline-none focus:border-editorial-gold"
 														/>
 													</td>
 													<td className="px-2 py-1.5">
 														<input
-															value={editDraft.country ?? ""}
-															onChange={(e) => setEditDraft((d) => ({ ...d, country: e.target.value }))}
+															value={
+																editDraft.country ??
+																""
+															}
+															onChange={(e) =>
+																setEditDraft(
+																	(d) => ({
+																		...d,
+																		country:
+																			e
+																				.target
+																				.value,
+																	}),
+																)
+															}
 															placeholder="—"
 															className="w-full border border-gray-200 px-2 py-1 text-sm focus:outline-none focus:border-editorial-gold"
 														/>
 													</td>
 													<td className="px-2 py-1.5">
 														<input
-															value={editDraft.coach_name ?? ""}
-															onChange={(e) => setEditDraft((d) => ({ ...d, coach_name: e.target.value }))}
+															value={
+																editDraft.coach_name ??
+																""
+															}
+															onChange={(e) =>
+																setEditDraft(
+																	(d) => ({
+																		...d,
+																		coach_name:
+																			e
+																				.target
+																				.value,
+																	}),
+																)
+															}
 															placeholder="—"
 															className="w-full border border-gray-200 px-2 py-1 text-sm focus:outline-none focus:border-editorial-gold"
 														/>
 													</td>
 													<td className="px-2 py-1.5">
 														<input
-															value={Array.isArray(editDraft.team_members) ? editDraft.team_members.join(", ") : (editDraft.team_members as unknown as string) ?? ""}
-															onChange={(e) => setEditDraft((d) => ({ ...d, team_members: e.target.value as unknown as string[] }))}
+															value={
+																Array.isArray(
+																	editDraft.team_members,
+																)
+																	? editDraft.team_members.join(
+																			", ",
+																		)
+																	: ((editDraft.team_members as unknown as string) ??
+																		"")
+															}
+															onChange={(e) =>
+																setEditDraft(
+																	(d) => ({
+																		...d,
+																		team_members:
+																			e
+																				.target
+																				.value as unknown as string[],
+																	}),
+																)
+															}
 															placeholder="Alice, Bob, …"
 															className="w-full border border-gray-200 px-2 py-1 text-sm focus:outline-none focus:border-editorial-gold"
 														/>
 													</td>
 													<td className="px-2 py-1.5">
 														<div className="flex gap-1.5 items-center justify-center flex-wrap">
-															<button onClick={handleSaveEdit} className="px-3 py-1 text-[10px] font-black uppercase tracking-wider bg-editorial-green text-white hover:opacity-80 transition-opacity">
+															<button
+																onClick={
+																	handleSaveEdit
+																}
+																className="px-3 py-1 text-[10px] font-black uppercase tracking-wider bg-editorial-green text-white hover:opacity-80 transition-opacity"
+															>
 																Save
 															</button>
-															<button onClick={() => { setEditingId(null); setEditDraft({}); setEditError(null); }} className="px-3 py-1 text-[10px] text-gray-400 border border-gray-200 hover:border-editorial-ink transition-colors">
+															<button
+																onClick={() => {
+																	setEditingId(
+																		null,
+																	);
+																	setEditDraft(
+																		{},
+																	);
+																	setEditError(
+																		null,
+																	);
+																}}
+																className="px-3 py-1 text-[10px] text-gray-400 border border-gray-200 hover:border-editorial-ink transition-colors"
+															>
 																Cancel
 															</button>
 														</div>
@@ -1112,25 +1673,68 @@ function TeamsTab({ category, onTeamsChanged }: { category: Category; onTeamsCha
 												</>
 											) : (
 												<>
-													<td className="px-3 py-2.5 font-semibold">{team.team_name}</td>
-													<td className="px-3 py-2.5 text-xs text-gray-500">{team.country ?? <span className="text-gray-300">—</span>}</td>
-													<td className="px-3 py-2.5 text-xs text-gray-500">{team.coach_name ?? <span className="text-gray-300">—</span>}</td>
-													<td className="px-3 py-2.5 text-xs text-gray-500 max-w-[176px] truncate">{team.team_members?.join(", ") ?? <span className="text-gray-300">—</span>}</td>
+													<td className="px-3 py-2.5 font-semibold">
+														{team.team_name}
+													</td>
+													<td className="px-3 py-2.5 text-xs text-gray-500">
+														{team.country ?? (
+															<span className="text-gray-300">
+																—
+															</span>
+														)}
+													</td>
+													<td className="px-3 py-2.5 text-xs text-gray-500">
+														{team.coach_name ?? (
+															<span className="text-gray-300">
+																—
+															</span>
+														)}
+													</td>
+													<td className="px-3 py-2.5 text-xs text-gray-500 max-w-[176px] truncate">
+														{team.team_members?.join(
+															", ",
+														) ?? (
+															<span className="text-gray-300">
+																—
+															</span>
+														)}
+													</td>
 													<td className="px-2 py-2.5 text-center">
 														<div className="flex items-center justify-center gap-2">
 															<button
-																onClick={() => { setEditingId(team.id); setEditDraft({ ...team }); setEditError(null); }}
+																onClick={() => {
+																	setEditingId(
+																		team.id,
+																	);
+																	setEditDraft(
+																		{
+																			...team,
+																		},
+																	);
+																	setEditError(
+																		null,
+																	);
+																}}
 																className="p-1 text-gray-300 hover:text-editorial-ink transition-colors"
 																title="Edit"
 															>
-																<Pencil size={13} />
+																<Pencil
+																	size={13}
+																/>
 															</button>
 															<button
-																onClick={() => handleDelete(team.id, team.team_name)}
+																onClick={() =>
+																	handleDelete(
+																		team.id,
+																		team.team_name,
+																	)
+																}
 																className="p-1 text-gray-300 hover:text-red-500 transition-colors"
 																title="Delete"
 															>
-																<Trash2 size={13} />
+																<Trash2
+																	size={13}
+																/>
 															</button>
 														</div>
 													</td>
@@ -1161,12 +1765,30 @@ function TeamsTab({ category, onTeamsChanged }: { category: Category; onTeamsCha
 					{/* CSV upload row */}
 					<div className="flex items-start justify-between gap-3 flex-wrap">
 						<div className="space-y-0.5">
-							<p className="text-xs text-gray-600 font-semibold">Type directly or upload a CSV to populate this table.</p>
-							<p className="text-[10px] text-gray-400">CSV headers: <code className="bg-gray-100 px-1">team_name, category, country, coach_name, team_members, team_description</code></p>
-							<p className="text-[10px] text-gray-400">team_members: comma-separated names within the cell. Use quotes in CSV if needed.</p>
+							<p className="text-xs text-gray-600 font-semibold">
+								Type directly or upload a CSV to populate this
+								table.
+							</p>
+							<p className="text-[10px] text-gray-400">
+								CSV headers:{" "}
+								<code className="bg-gray-100 px-1">
+									team_name, category, country, coach_name,
+									team_members, team_description
+								</code>
+							</p>
+							<p className="text-[10px] text-gray-400">
+								team_members: comma-separated names within the
+								cell. Use quotes in CSV if needed.
+							</p>
 						</div>
 						<div className="flex items-center gap-2 shrink-0">
-							<input ref={fileRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleCsvUpload} />
+							<input
+								ref={fileRef}
+								type="file"
+								accept=".csv,.txt"
+								className="hidden"
+								onChange={handleCsvUpload}
+							/>
 							<button
 								onClick={() => fileRef.current?.click()}
 								className="flex items-center gap-1.5 text-xs font-semibold border border-gray-200 px-3 py-1.5 hover:border-editorial-ink hover:text-editorial-ink transition-colors"
@@ -1174,7 +1796,15 @@ function TeamsTab({ category, onTeamsChanged }: { category: Category; onTeamsCha
 								<Upload size={12} /> Upload CSV
 							</button>
 							<button
-								onClick={() => { setBulkRows(Array.from({ length: 5 }, () => makeEmptyBulkRow(category))); setBulkError(null); setBulkSuccess(null); }}
+								onClick={() => {
+									setBulkRows(
+										Array.from({ length: 5 }, () =>
+											makeEmptyBulkRow(category),
+										),
+									);
+									setBulkError(null);
+									setBulkSuccess(null);
+								}}
 								className="text-[10px] text-gray-400 underline hover:text-red-500 transition-colors"
 							>
 								Clear all
@@ -1190,20 +1820,38 @@ function TeamsTab({ category, onTeamsChanged }: { category: Category; onTeamsCha
 						>
 							<colgroup>
 								{Array.from({ length: 8 }, (_, i) => (
-									<col key={i} style={bulkResize.getColumnStyle(i)} />
+									<col
+										key={i}
+										style={bulkResize.getColumnStyle(i)}
+									/>
 								))}
 							</colgroup>
 							<thead>
 								<tr className="bg-editorial-ink text-white text-[10px] uppercase tracking-widest">
-									<th className="px-2 py-2 text-center font-black w-8">#</th>
-									<th className="px-3 py-2 text-left font-black min-w-[180px]">
-										Team Name <span className="text-editorial-gold/80">*</span>
+									<th className="px-2 py-2 text-center font-black w-8">
+										#
 									</th>
-									<th className="px-3 py-2 text-left font-black w-28">Category</th>
-									<th className="px-3 py-2 text-left font-black w-28">Country</th>
-									<th className="px-3 py-2 text-left font-black w-36">Coach</th>
-									<th className="px-3 py-2 text-left font-black w-48">Members (comma-sep)</th>
-									<th className="px-3 py-2 text-left font-black w-48">Description</th>
+									<th className="px-3 py-2 text-left font-black min-w-[180px]">
+										Team Name{" "}
+										<span className="text-editorial-gold/80">
+											*
+										</span>
+									</th>
+									<th className="px-3 py-2 text-left font-black w-28">
+										Category
+									</th>
+									<th className="px-3 py-2 text-left font-black w-28">
+										Country
+									</th>
+									<th className="px-3 py-2 text-left font-black w-36">
+										Coach
+									</th>
+									<th className="px-3 py-2 text-left font-black w-48">
+										Members (comma-sep)
+									</th>
+									<th className="px-3 py-2 text-left font-black w-48">
+										Description
+									</th>
 									<th className="w-8" />
 								</tr>
 							</thead>
@@ -1212,24 +1860,50 @@ function TeamsTab({ category, onTeamsChanged }: { category: Category; onTeamsCha
 									const hasData = bulkRowHasData(row);
 									const nameEmpty = !row.team_name.trim();
 									const nameError = hasData && nameEmpty;
-									const rowFilled = row.team_name.trim() || hasData;
+									const rowFilled =
+										row.team_name.trim() || hasData;
 
 									return (
-										<tr key={row._id} className={`border-b border-gray-100 ${rowIndex % 2 === 0 ? "bg-white" : "bg-editorial-bg/30"}`}>
-											<td className="px-2 py-0 text-[10px] text-gray-300 font-mono text-center">{rowIndex + 1}</td>
+										<tr
+											key={row._id}
+											className={`border-b border-gray-100 ${rowIndex % 2 === 0 ? "bg-white" : "bg-editorial-bg/30"}`}
+										>
+											<td className="px-2 py-0 text-[10px] text-gray-300 font-mono text-center">
+												{rowIndex + 1}
+											</td>
 
 											{/* Team Name */}
-											<td className={nameError ? "bg-red-50" : ""}>
+											<td
+												className={
+													nameError
+														? "bg-red-50 border border-red-300"
+														: ""
+												}
+											>
 												<input
 													type="text"
 													data-bulk-row={rowIndex}
 													data-bulk-col={0}
 													value={row.team_name}
-													placeholder={nameError ? "Name required!" : "Team name…"}
-													onChange={(e) => handleBulkChange(rowIndex, "team_name", e.target.value)}
-													onKeyDown={(e) => handleBulkKeyDown(e, rowIndex, 0)}
+													placeholder="Team name…"
+													onChange={(e) =>
+														handleBulkChange(
+															rowIndex,
+															"team_name",
+															e.target.value,
+														)
+													}
+													onKeyDown={(e) =>
+														handleBulkKeyDown(
+															e,
+															rowIndex,
+															0,
+														)
+													}
 													className={`w-full px-3 py-2 bg-transparent text-sm font-semibold focus:outline-none focus:bg-editorial-gold/10 placeholder:text-gray-300 ${
-														nameError ? "text-red-600 placeholder:text-red-400 placeholder:font-bold" : ""
+														nameError
+															? "text-red-600"
+															: ""
 													}`}
 												/>
 											</td>
@@ -1240,38 +1914,84 @@ function TeamsTab({ category, onTeamsChanged }: { category: Category; onTeamsCha
 													data-bulk-row={rowIndex}
 													data-bulk-col={1}
 													value={row.category}
-													onChange={(e) => handleBulkChange(rowIndex, "category", e.target.value)}
+													onChange={(e) =>
+														handleBulkChange(
+															rowIndex,
+															"category",
+															e.target.value,
+														)
+													}
 													className="w-full px-3 py-2 bg-transparent text-sm font-semibold focus:outline-none focus:bg-editorial-gold/10 appearance-none cursor-pointer"
 												>
-													<option value="Junior">Junior</option>
-													<option value="Senior">Senior</option>
+													<option value="Junior">
+														Junior
+													</option>
+													<option value="Senior">
+														Senior
+													</option>
 												</select>
 											</td>
 
 											{/* Country */}
-											<td className={!row.country && rowFilled ? "bg-amber-50/60" : ""}>
+											<td
+												className={
+													!row.country && rowFilled
+														? "bg-amber-50/60"
+														: ""
+												}
+											>
 												<input
 													type="text"
 													data-bulk-row={rowIndex}
 													data-bulk-col={2}
 													value={row.country}
 													placeholder="—"
-													onChange={(e) => handleBulkChange(rowIndex, "country", e.target.value)}
-													onKeyDown={(e) => handleBulkKeyDown(e, rowIndex, 2)}
+													onChange={(e) =>
+														handleBulkChange(
+															rowIndex,
+															"country",
+															e.target.value,
+														)
+													}
+													onKeyDown={(e) =>
+														handleBulkKeyDown(
+															e,
+															rowIndex,
+															2,
+														)
+													}
 													className="w-full px-3 py-2 bg-transparent text-sm focus:outline-none focus:bg-editorial-gold/10 placeholder:text-gray-300"
 												/>
 											</td>
 
 											{/* Coach */}
-											<td className={!row.coach_name && rowFilled ? "bg-amber-50/60" : ""}>
+											<td
+												className={
+													!row.coach_name && rowFilled
+														? "bg-amber-50/60"
+														: ""
+												}
+											>
 												<input
 													type="text"
 													data-bulk-row={rowIndex}
 													data-bulk-col={3}
 													value={row.coach_name}
 													placeholder="—"
-													onChange={(e) => handleBulkChange(rowIndex, "coach_name", e.target.value)}
-													onKeyDown={(e) => handleBulkKeyDown(e, rowIndex, 3)}
+													onChange={(e) =>
+														handleBulkChange(
+															rowIndex,
+															"coach_name",
+															e.target.value,
+														)
+													}
+													onKeyDown={(e) =>
+														handleBulkKeyDown(
+															e,
+															rowIndex,
+															3,
+														)
+													}
 													className="w-full px-3 py-2 bg-transparent text-sm focus:outline-none focus:bg-editorial-gold/10 placeholder:text-gray-300"
 												/>
 											</td>
@@ -1284,8 +2004,20 @@ function TeamsTab({ category, onTeamsChanged }: { category: Category; onTeamsCha
 													data-bulk-col={4}
 													value={row.team_members}
 													placeholder="Alice, Bob, …"
-													onChange={(e) => handleBulkChange(rowIndex, "team_members", e.target.value)}
-													onKeyDown={(e) => handleBulkKeyDown(e, rowIndex, 4)}
+													onChange={(e) =>
+														handleBulkChange(
+															rowIndex,
+															"team_members",
+															e.target.value,
+														)
+													}
+													onKeyDown={(e) =>
+														handleBulkKeyDown(
+															e,
+															rowIndex,
+															4,
+														)
+													}
 													className="w-full px-3 py-2 bg-transparent text-sm focus:outline-none focus:bg-editorial-gold/10 placeholder:text-gray-300"
 												/>
 											</td>
@@ -1298,8 +2030,20 @@ function TeamsTab({ category, onTeamsChanged }: { category: Category; onTeamsCha
 													data-bulk-col={5}
 													value={row.team_description}
 													placeholder="—"
-													onChange={(e) => handleBulkChange(rowIndex, "team_description", e.target.value)}
-													onKeyDown={(e) => handleBulkKeyDown(e, rowIndex, 5)}
+													onChange={(e) =>
+														handleBulkChange(
+															rowIndex,
+															"team_description",
+															e.target.value,
+														)
+													}
+													onKeyDown={(e) =>
+														handleBulkKeyDown(
+															e,
+															rowIndex,
+															5,
+														)
+													}
 													className="w-full px-3 py-2 bg-transparent text-sm focus:outline-none focus:bg-editorial-gold/10 placeholder:text-gray-300"
 												/>
 											</td>
@@ -1308,7 +2052,20 @@ function TeamsTab({ category, onTeamsChanged }: { category: Category; onTeamsCha
 											<td className="px-1 text-center">
 												<button
 													tabIndex={-1}
-													onClick={() => setBulkRows((prev) => prev.length > 1 ? prev.filter((_, i) => i !== rowIndex) : prev)}
+													onClick={() =>
+														setBulkRows((prev) =>
+															prev.length > 1
+																? prev.filter(
+																		(
+																			_,
+																			i,
+																		) =>
+																			i !==
+																			rowIndex,
+																	)
+																: prev,
+														)
+													}
 													className="text-gray-200 hover:text-red-400 transition-colors"
 													title="Remove row"
 												>
@@ -1324,11 +2081,31 @@ function TeamsTab({ category, onTeamsChanged }: { category: Category; onTeamsCha
 
 					{/* Hints row */}
 					<div className="flex items-center gap-6 text-[10px] text-gray-400 flex-wrap">
-						<span><kbd className="font-mono bg-gray-100 px-1">Tab</kbd> next cell</span>
-						<span><kbd className="font-mono bg-gray-100 px-1">Enter</kbd> / <kbd className="font-mono bg-gray-100 px-1">↓</kbd> next row</span>
-						<span><kbd className="font-mono bg-gray-100 px-1">↑</kbd> prev row</span>
+						<span>
+							<kbd className="font-mono bg-gray-100 px-1">
+								Tab
+							</kbd>{" "}
+							next cell
+						</span>
+						<span>
+							<kbd className="font-mono bg-gray-100 px-1">
+								Enter
+							</kbd>{" "}
+							/{" "}
+							<kbd className="font-mono bg-gray-100 px-1">↓</kbd>{" "}
+							next row
+						</span>
+						<span>
+							<kbd className="font-mono bg-gray-100 px-1">↑</kbd>{" "}
+							prev row
+						</span>
 						<button
-							onClick={() => setBulkRows((prev) => [...prev, makeEmptyBulkRow(category)])}
+							onClick={() =>
+								setBulkRows((prev) => [
+									...prev,
+									makeEmptyBulkRow(category),
+								])
+							}
 							className="ml-auto flex items-center gap-1 text-gray-400 hover:text-editorial-ink transition-colors"
 						>
 							<Plus size={11} /> Add row
@@ -1341,7 +2118,9 @@ function TeamsTab({ category, onTeamsChanged }: { category: Category; onTeamsCha
 						</p>
 					)}
 					{bulkSuccess && (
-						<p className="text-xs text-editorial-green font-semibold">{bulkSuccess}</p>
+						<p className="text-xs text-editorial-green font-semibold">
+							{bulkSuccess}
+						</p>
 					)}
 
 					<div className="flex items-center gap-3 pt-1 flex-wrap">
@@ -1350,10 +2129,15 @@ function TeamsTab({ category, onTeamsChanged }: { category: Category; onTeamsCha
 							disabled={bulkSaving || readyCount === 0}
 							className="border-2 border-editorial-ink bg-editorial-gold text-editorial-ink px-5 py-2 text-xs font-black uppercase tracking-widest hover:bg-editorial-ink hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]"
 						>
-							{bulkSaving ? "Saving…" : `Save ${readyCount || ""} Team${readyCount !== 1 ? "s" : ""} →`}
+							{bulkSaving
+								? "Saving…"
+								: `Save ${readyCount || ""} Team${readyCount !== 1 ? "s" : ""} →`}
 						</button>
 						{readyCount > 0 && (
-							<span className="text-xs text-gray-400">{readyCount} row{readyCount !== 1 ? "s" : ""} with team names ready</span>
+							<span className="text-xs text-gray-400">
+								{readyCount} row{readyCount !== 1 ? "s" : ""}{" "}
+								with team names ready
+							</span>
 						)}
 					</div>
 				</div>
@@ -1387,16 +2171,28 @@ function CollapsiblePanel({
 	}, [open, children]);
 
 	return (
-		<div className={`border bg-white overflow-hidden ${accent ? "border-editorial-gold/60" : "border-gray-200"}`}>
+		<div
+			className={`border bg-white overflow-hidden ${accent ? "border-editorial-gold/60" : "border-gray-200"}`}
+		>
 			<button
 				onClick={onToggle}
 				className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-editorial-ink/5 transition-colors"
 			>
-				{open ? <ChevronUp size={14} className="shrink-0 text-gray-400" /> : <ChevronDown size={14} className="shrink-0 text-gray-400" />}
-				<span className="text-xs font-black uppercase tracking-widest flex-1">{title}</span>
+				{open ? (
+					<ChevronUp size={14} className="shrink-0 text-gray-400" />
+				) : (
+					<ChevronDown size={14} className="shrink-0 text-gray-400" />
+				)}
+				<span className="text-xs font-black uppercase tracking-widest flex-1">
+					{title}
+				</span>
 			</button>
 			<div
-				style={{ height: typeof height === "number" ? `${height}px` : height, overflow: "hidden", transition: "height 200ms ease" }}
+				style={{
+					height: typeof height === "number" ? `${height}px` : height,
+					overflow: "hidden",
+					transition: "height 200ms ease",
+				}}
 			>
 				<div ref={ref} className="border-t border-gray-100">
 					{children}
@@ -1409,8 +2205,18 @@ function CollapsiblePanel({
 // ─── PhaseAccordion ───────────────────────────────────────────────────────────
 
 function PhaseAccordion({
-	phase, matches, thirdPlaceMatches, overrideMatchId, winnerConfirming, lockType,
-	onSetWinner, onToggleOverride, onAdvanceWinners, canAdvance, onLock, onUnlock,
+	phase,
+	matches,
+	thirdPlaceMatches,
+	overrideMatchId,
+	winnerConfirming,
+	lockType,
+	onSetWinner,
+	onToggleOverride,
+	onAdvanceWinners,
+	canAdvance,
+	onLock,
+	onUnlock,
 }: {
 	phase: Phase;
 	matches: MatchWithTeams[];
@@ -1427,35 +2233,68 @@ function PhaseAccordion({
 }) {
 	const allConfirmed = matches.every((m) => m.winner_id);
 	const confirmedCount = matches.filter((m) => m.winner_id).length;
-	const [open, setOpen] = useState(!allConfirmed);
+	const [open, setOpen] = useState(false);
 
 	return (
-		<div className={`border-2 bg-white overflow-hidden ${allConfirmed ? "border-editorial-green/40" : "border-editorial-ink"}`}>
+		<div
+			className={`border-2 bg-white overflow-hidden ${allConfirmed ? "border-editorial-green/40" : "border-editorial-ink"}`}
+		>
 			{/* Accordion header */}
 			<div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100">
 				<button
-					onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+					onClick={(e) => {
+						e.stopPropagation();
+						setOpen((v) => !v);
+					}}
 					className="flex items-center gap-3 flex-1 text-left min-w-0"
 				>
-					{open ? <ChevronUp size={14} className="shrink-0 text-gray-400" /> : <ChevronDown size={14} className="shrink-0 text-gray-400" />}
-					<span className="text-xs font-black uppercase tracking-widest flex-1 truncate">{phase}</span>
-					<span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 shrink-0 ${
-						allConfirmed
-							? "bg-editorial-green/10 text-editorial-green border border-editorial-green/30"
-							: "bg-amber-50 text-amber-600 border border-amber-200"
-					}`}>
-						{allConfirmed ? `All confirmed` : `${confirmedCount}/${matches.length}`}
+					{open ? (
+						<ChevronUp
+							size={14}
+							className="shrink-0 text-gray-400"
+						/>
+					) : (
+						<ChevronDown
+							size={14}
+							className="shrink-0 text-gray-400"
+						/>
+					)}
+					<span className="text-xs font-black uppercase tracking-widest flex-1 truncate">
+						{phase}
+					</span>
+					<span
+						className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 shrink-0 ${
+							allConfirmed
+								? "bg-editorial-green/10 text-editorial-green border border-editorial-green/30"
+								: "bg-amber-50 text-amber-600 border border-amber-200"
+						}`}
+					>
+						{allConfirmed
+							? `All confirmed`
+							: `${confirmedCount}/${matches.length}`}
 					</span>
 				</button>
 
 				{/* Actions (stopPropagation to avoid toggle) */}
-				<div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
-					<LockControl phase={phase} lockType={lockType} onLock={onLock} onUnlock={onUnlock} />
+				<div
+					className="flex items-center gap-2 shrink-0"
+					onClick={(e) => e.stopPropagation()}
+				>
+					<LockControl
+						phase={phase}
+						lockType={lockType}
+						onLock={onLock}
+						onUnlock={onUnlock}
+					/>
 					{onAdvanceWinners && canAdvance && (
 						<button
 							onClick={onAdvanceWinners}
 							disabled={!allConfirmed}
-							title={!allConfirmed ? "Confirm all winners first" : undefined}
+							title={
+								!allConfirmed
+									? "Confirm all winners first"
+									: undefined
+							}
 							className="border-2 border-editorial-ink px-3 py-1.5 text-[10px] font-black uppercase tracking-widest bg-white hover:bg-editorial-gold transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] whitespace-nowrap"
 						>
 							Advance → {nextPhaseFor(phase)}
@@ -1468,7 +2307,10 @@ function PhaseAccordion({
 			{open && (
 				<div className="divide-y divide-gray-100">
 					{matches.map((m, i) => (
-						<MatchCard key={m.id} match={m} matchNumber={i + 1}
+						<MatchCard
+							key={m.id}
+							match={m}
+							matchNumber={i + 1}
 							isOverriding={overrideMatchId === m.id}
 							isConfirming={winnerConfirming === m.id}
 							onSetWinner={onSetWinner}
@@ -1482,7 +2324,10 @@ function PhaseAccordion({
 								Third Place Match
 							</p>
 							{thirdPlaceMatches.map((m, i) => (
-								<MatchCard key={m.id} match={m} matchNumber={i + 1}
+								<MatchCard
+									key={m.id}
+									match={m}
+									matchNumber={i + 1}
 									isOverriding={overrideMatchId === m.id}
 									isConfirming={winnerConfirming === m.id}
 									onSetWinner={onSetWinner}
@@ -1499,7 +2344,12 @@ function PhaseAccordion({
 
 // ─── LockControl ─────────────────────────────────────────────────────────────
 
-function LockControl({ phase, lockType, onLock, onUnlock }: {
+function LockControl({
+	phase,
+	lockType,
+	onLock,
+	onUnlock,
+}: {
 	phase: string;
 	lockType: string | null;
 	onLock: (lt: "full" | "scores") => void;
@@ -1510,11 +2360,13 @@ function LockControl({ phase, lockType, onLock, onUnlock }: {
 	if (lockType) {
 		return (
 			<div className="flex items-center gap-2 shrink-0">
-				<span className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1 px-2 py-1 border ${
-					lockType === "full"
-						? "bg-red-50 text-red-600 border-red-200"
-						: "bg-amber-50 text-amber-700 border-amber-200"
-				}`}>
+				<span
+					className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1 px-2 py-1 border ${
+						lockType === "full"
+							? "bg-red-50 text-red-600 border-red-200"
+							: "bg-amber-50 text-amber-700 border-amber-200"
+					}`}
+				>
 					<Lock size={9} />
 					{lockType === "full" ? "Locked" : "Scores Hidden"}
 				</span>
@@ -1543,18 +2395,28 @@ function LockControl({ phase, lockType, onLock, onUnlock }: {
 						Spectator lock — {phase}
 					</p>
 					<button
-						onClick={() => { onLock("scores"); setOpen(false); }}
+						onClick={() => {
+							onLock("scores");
+							setOpen(false);
+						}}
 						className="w-full text-left px-3 py-2 text-xs border border-gray-200 hover:border-editorial-gold hover:bg-editorial-gold/10 transition-colors"
 					>
 						<span className="font-bold block">Hide Scores</span>
-						<span className="text-[10px] text-gray-400">Show teams, hide point values</span>
+						<span className="text-[10px] text-gray-400">
+							Show teams, hide point values
+						</span>
 					</button>
 					<button
-						onClick={() => { onLock("full"); setOpen(false); }}
+						onClick={() => {
+							onLock("full");
+							setOpen(false);
+						}}
 						className="w-full text-left px-3 py-2 text-xs border border-gray-200 hover:border-red-300 hover:bg-red-50 transition-colors"
 					>
 						<span className="font-bold block">Lock All</span>
-						<span className="text-[10px] text-gray-400">Hide everything from spectators</span>
+						<span className="text-[10px] text-gray-400">
+							Hide everything from spectators
+						</span>
 					</button>
 					<button
 						onClick={() => setOpen(false)}
@@ -1570,7 +2432,13 @@ function LockControl({ phase, lockType, onLock, onUnlock }: {
 
 // ─── StandingsTable ───────────────────────────────────────────────────────────
 
-function StandingsTable({ standings, advanceCount }: { standings: Standing[]; advanceCount: AdvanceCount }) {
+function StandingsTable({
+	standings,
+	advanceCount,
+}: {
+	standings: Standing[];
+	advanceCount: AdvanceCount;
+}) {
 	return (
 		<div className="overflow-hidden">
 			<div className="bg-editorial-ink text-white grid grid-cols-[28px_1fr_80px_88px_48px] px-3 py-2 text-[10px] font-black uppercase tracking-widest">
@@ -1582,21 +2450,34 @@ function StandingsTable({ standings, advanceCount }: { standings: Standing[]; ad
 			</div>
 
 			{standings.map((s, i) => (
-				<div key={s.team.id}
+				<div
+					key={s.team.id}
 					className={`grid grid-cols-[28px_1fr_80px_88px_48px] px-3 py-2.5 border-t border-gray-100 items-center border-l-4 ${
-						i < advanceCount ? "border-l-editorial-gold" : "border-l-transparent"
+						i < advanceCount
+							? "border-l-editorial-gold"
+							: "border-l-transparent"
 					} ${i % 2 === 0 ? "bg-white" : "bg-editorial-bg/40"}`}
 				>
-					<span className="text-xs font-black text-gray-400">{s.rank}</span>
-					<span className="text-sm font-semibold truncate">{s.team.team_name}</span>
-					<span className={`text-right text-sm font-black font-mono ${s.best_round > 0 ? "text-editorial-green" : "text-gray-300"}`}>
+					<span className="text-xs font-black text-gray-400">
+						{s.rank}
+					</span>
+					<span className="text-sm font-semibold truncate">
+						{s.team.team_name}
+					</span>
+					<span
+						className={`text-right text-sm font-black font-mono ${s.best_round > 0 ? "text-editorial-green" : "text-gray-300"}`}
+					>
 						{s.best_round > 0 ? s.best_round : "—"}
 					</span>
 					<span className="text-right text-xs font-mono text-gray-400">
 						{s.total_points > 0 ? s.total_points : "—"}
 					</span>
 					<span className="text-center text-[10px] font-black">
-						{i < advanceCount ? <span className="text-editorial-gold">ADV</span> : <span className="text-gray-200">—</span>}
+						{i < advanceCount ? (
+							<span className="text-editorial-gold">ADV</span>
+						) : (
+							<span className="text-gray-200">—</span>
+						)}
 					</span>
 				</div>
 			))}
@@ -1606,7 +2487,11 @@ function StandingsTable({ standings, advanceCount }: { standings: Standing[]; ad
 
 // ─── SeedPreview ──────────────────────────────────────────────────────────────
 
-function SeedPreview({ pairings, topTeams, targetPhase }: {
+function SeedPreview({
+	pairings,
+	topTeams,
+	targetPhase,
+}: {
 	pairings: [number, number][];
 	topTeams: Standing[];
 	targetPhase: Phase;
@@ -1620,16 +2505,43 @@ function SeedPreview({ pairings, topTeams, targetPhase }: {
 				const tA = topTeams[seedA - 1];
 				const tB = topTeams[seedB - 1];
 				return (
-					<div key={i} className="flex items-center gap-3 text-sm py-0.5">
+					<div
+						key={i}
+						className="flex items-center gap-3 text-sm py-0.5"
+					>
 						<span className="w-16 text-right text-[10px] font-bold text-gray-400 shrink-0">
 							Match {i + 1}
 						</span>
-						<span className={`flex-1 font-semibold ${!tA ? "text-gray-300 italic" : ""}`}>
-							{tA ? <><span className="text-xs text-gray-400 mr-1">#{seedA}</span>{tA.team.team_name}</> : `Seed #${seedA} — no score`}
+						<span
+							className={`flex-1 font-semibold ${!tA ? "text-gray-300 italic" : ""}`}
+						>
+							{tA ? (
+								<>
+									<span className="text-xs text-gray-400 mr-1">
+										#{seedA}
+									</span>
+									{tA.team.team_name}
+								</>
+							) : (
+								`Seed #${seedA} — no score`
+							)}
 						</span>
-						<span className="text-xs text-gray-400 font-bold shrink-0">vs</span>
-						<span className={`flex-1 font-semibold ${!tB ? "text-gray-300 italic" : ""}`}>
-							{tB ? <><span className="text-xs text-gray-400 mr-1">#{seedB}</span>{tB.team.team_name}</> : `Seed #${seedB} — no score`}
+						<span className="text-xs text-gray-400 font-bold shrink-0">
+							vs
+						</span>
+						<span
+							className={`flex-1 font-semibold ${!tB ? "text-gray-300 italic" : ""}`}
+						>
+							{tB ? (
+								<>
+									<span className="text-xs text-gray-400 mr-1">
+										#{seedB}
+									</span>
+									{tB.team.team_name}
+								</>
+							) : (
+								`Seed #${seedB} — no score`
+							)}
 						</span>
 					</div>
 				);
@@ -1640,7 +2552,14 @@ function SeedPreview({ pairings, topTeams, targetPhase }: {
 
 // ─── MatchCard ────────────────────────────────────────────────────────────────
 
-function MatchCard({ match, matchNumber, isOverriding, isConfirming, onSetWinner, onToggleOverride }: {
+function MatchCard({
+	match,
+	matchNumber,
+	isOverriding,
+	isConfirming,
+	onSetWinner,
+	onToggleOverride,
+}: {
 	match: MatchWithTeams;
 	matchNumber: number;
 	isOverriding: boolean;
@@ -1650,40 +2569,74 @@ function MatchCard({ match, matchNumber, isOverriding, isConfirming, onSetWinner
 }) {
 	const t1Score = match.team_1_final_points ?? 0;
 	const t2Score = match.team_2_final_points ?? 0;
-	const suggestedId = t1Score > t2Score ? match.team_1_id : t2Score > t1Score ? match.team_2_id : null;
+	const suggestedId =
+		t1Score > t2Score
+			? match.team_1_id
+			: t2Score > t1Score
+				? match.team_2_id
+				: null;
 	const hasWinner = !!match.winner_id;
-	const isTied = match.team_1_id && match.team_2_id && t1Score === t2Score && (t1Score > 0);
+	const isTied =
+		match.team_1_id &&
+		match.team_2_id &&
+		t1Score === t2Score &&
+		t1Score > 0;
 	const showPicker = !hasWinner || isOverriding;
 
 	return (
-		<div className={`px-4 py-3 transition-colors ${hasWinner ? "bg-editorial-green/5" : "bg-white"}`}>
+		<div
+			className={`px-4 py-3 transition-colors ${hasWinner ? "bg-editorial-green/5" : "bg-white"}`}
+		>
 			<div className="flex items-center gap-3 flex-wrap">
 				<span className="text-[10px] font-black text-gray-300 w-10 shrink-0 uppercase tracking-wide">
 					M{matchNumber}
 					{match.table_number !== null && (
-						<span className="block text-gray-200">T{match.table_number}</span>
+						<span className="block text-gray-200">
+							T{match.table_number}
+						</span>
 					)}
 				</span>
 
-				<span className={`flex-1 min-w-[6rem] text-sm font-semibold truncate ${t1Score > t2Score && t1Score > 0 ? "text-editorial-green" : ""}`}>
-					{match.team_1?.team_name ?? <span className="text-gray-300 italic">TBD</span>}
+				<span
+					className={`flex-1 min-w-[6rem] text-sm font-semibold truncate ${t1Score > t2Score && t1Score > 0 ? "text-editorial-green" : ""}`}
+				>
+					{match.team_1?.team_name ?? (
+						<span className="text-gray-300 italic">TBD</span>
+					)}
 				</span>
 
 				<div className="flex items-center gap-2 shrink-0">
-					<span className={`text-lg font-black font-mono w-10 text-right ${t1Score > t2Score ? "text-editorial-green" : "text-editorial-ink"}`}>{t1Score}</span>
+					<span
+						className={`text-lg font-black font-mono w-10 text-right ${t1Score > t2Score ? "text-editorial-green" : "text-editorial-ink"}`}
+					>
+						{t1Score}
+					</span>
 					<span className="text-gray-200 font-bold text-xs">vs</span>
-					<span className={`text-lg font-black font-mono w-10 ${t2Score > t1Score ? "text-editorial-green" : "text-editorial-ink"}`}>{t2Score}</span>
+					<span
+						className={`text-lg font-black font-mono w-10 ${t2Score > t1Score ? "text-editorial-green" : "text-editorial-ink"}`}
+					>
+						{t2Score}
+					</span>
 				</div>
 
-				<span className={`flex-1 min-w-[6rem] text-sm font-semibold text-right truncate ${t2Score > t1Score && t2Score > 0 ? "text-editorial-green" : ""}`}>
-					{match.team_2?.team_name ?? <span className="text-gray-300 italic">TBD</span>}
+				<span
+					className={`flex-1 min-w-[6rem] text-sm font-semibold text-right truncate ${t2Score > t1Score && t2Score > 0 ? "text-editorial-green" : ""}`}
+				>
+					{match.team_2?.team_name ?? (
+						<span className="text-gray-300 italic">TBD</span>
+					)}
 				</span>
 
 				<div className="shrink-0 flex items-center gap-2">
 					{hasWinner && !isOverriding && (
 						<>
-							<span className="text-xs font-black text-editorial-green">✓ {match.winner?.team_name}</span>
-							<button onClick={() => onToggleOverride(match.id)} className="text-[10px] text-gray-400 underline hover:text-editorial-ink">
+							<span className="text-xs font-black text-editorial-green">
+								✓ {match.winner?.team_name}
+							</span>
+							<button
+								onClick={() => onToggleOverride(match.id)}
+								className="text-[10px] text-gray-400 underline hover:text-editorial-ink"
+							>
 								Edit
 							</button>
 						</>
@@ -1697,34 +2650,58 @@ function MatchCard({ match, matchNumber, isOverriding, isConfirming, onSetWinner
 						{isOverriding ? "Override:" : "Winner:"}
 					</span>
 
-					{([
-						{ team: match.team_1, id: match.team_1_id, score: t1Score },
-						{ team: match.team_2, id: match.team_2_id, score: t2Score },
-					] as const).map(({ team, id, score }) => {
+					{(
+						[
+							{
+								team: match.team_1,
+								id: match.team_1_id,
+								score: t1Score,
+							},
+							{
+								team: match.team_2,
+								id: match.team_2_id,
+								score: t2Score,
+							},
+						] as const
+					).map(({ team, id, score }) => {
 						if (!id || !team) return null;
 						const suggested = id === suggestedId;
 						return (
-							<button key={id} onClick={() => onSetWinner(match.id, id)} disabled={isConfirming}
+							<button
+								key={id}
+								onClick={() => onSetWinner(match.id, id)}
+								disabled={isConfirming}
 								className={`px-3 py-1.5 border-2 text-xs font-black uppercase tracking-widest transition-colors disabled:opacity-50 ${
 									suggested
 										? "border-editorial-gold bg-editorial-gold/10 hover:bg-editorial-gold"
 										: "border-gray-200 text-gray-600 hover:border-editorial-ink hover:text-editorial-ink"
 								}`}
 							>
-								{suggested ? "★ " : ""}{team.team_name} <span className="font-mono">({score})</span>
+								{suggested ? "★ " : ""}
+								{team.team_name}{" "}
+								<span className="font-mono">({score})</span>
 							</button>
 						);
 					})}
 
 					{isTied && (
-						<span className="text-[10px] text-editorial-gold font-semibold">Tied — admin must decide</span>
+						<span className="text-[10px] text-editorial-gold font-semibold">
+							Tied — admin must decide
+						</span>
 					)}
 					{isOverriding && (
-						<button onClick={() => onToggleOverride(null)} className="text-[10px] text-gray-400 underline hover:text-editorial-ink">
+						<button
+							onClick={() => onToggleOverride(null)}
+							className="text-[10px] text-gray-400 underline hover:text-editorial-ink"
+						>
 							Cancel
 						</button>
 					)}
-					{isConfirming && <span className="text-[10px] text-editorial-gold animate-pulse">Saving…</span>}
+					{isConfirming && (
+						<span className="text-[10px] text-editorial-gold animate-pulse">
+							Saving…
+						</span>
+					)}
 				</div>
 			)}
 		</div>

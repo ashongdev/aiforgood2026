@@ -7,15 +7,94 @@ import {
 	ChevronUp,
 	Lock,
 	LogOut,
+	Pencil,
 	Plus,
 	RefreshCw,
 	Trash2,
 	Trophy,
 	Unlock,
+	Upload,
+	Users,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
 import type { Category, MatchWithTeams, Phase, Team } from "../lib/database.types";
+
+// ─── Bulk-add types & helpers ─────────────────────────────────────────────────
+
+interface BulkRow {
+	_id: string;
+	team_name: string;
+	category: Category;
+	country: string;
+	coach_name: string;
+	team_members: string;
+	team_description: string;
+}
+
+const BULK_COLS = ["team_name", "category", "country", "coach_name", "team_members", "team_description"] as const;
+type BulkCol = typeof BULK_COLS[number];
+// Columns that are text inputs (exclude category select) — used for arrow-key col count
+const BULK_INPUT_COUNT = BULK_COLS.length;
+
+function makeEmptyBulkRow(cat: Category): BulkRow {
+	return { _id: crypto.randomUUID(), team_name: "", category: cat, country: "", coach_name: "", team_members: "", team_description: "" };
+}
+
+function bulkRowHasData(r: BulkRow): boolean {
+	return !!(r.country || r.coach_name || r.team_members || r.team_description);
+}
+
+function focusBulkCell(row: number, col: number) {
+	(document.querySelector<HTMLElement>(`[data-bulk-row="${row}"][data-bulk-col="${col}"]`))?.focus();
+}
+
+function parseCSVLine(line: string): string[] {
+	const result: string[] = [];
+	let cur = "";
+	let inQuotes = false;
+	for (let i = 0; i < line.length; i++) {
+		const ch = line[i];
+		if (ch === '"') {
+			if (inQuotes && line[i + 1] === '"') { cur += '"'; i++; }
+			else inQuotes = !inQuotes;
+		} else if (ch === "," && !inQuotes) {
+			result.push(cur); cur = "";
+		} else {
+			cur += ch;
+		}
+	}
+	result.push(cur);
+	return result.map((s) => s.trim().replace(/^"|"$/g, ""));
+}
+
+function parseCSV(text: string, defaultCategory: Category): BulkRow[] {
+	const lines = text.trim().split(/\r?\n/).filter((l) => l.trim());
+	if (lines.length < 2) return [];
+	const rawHeaders = parseCSVLine(lines[0]).map((h) => h.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z_]/g, ""));
+	const colMap: Record<string, BulkCol> = {
+		team_name: "team_name", team: "team_name", name: "team_name",
+		category: "category",
+		country: "country",
+		coach_name: "coach_name", coach: "coach_name",
+		team_members: "team_members", members: "team_members",
+		team_description: "team_description", description: "team_description",
+	};
+	return lines.slice(1).map((line) => {
+		const cells = parseCSVLine(line);
+		const row = makeEmptyBulkRow(defaultCategory);
+		rawHeaders.forEach((h, i) => {
+			const col = colMap[h];
+			if (!col || cells[i] === undefined) return;
+			if (col === "category") {
+				row.category = cells[i] === "Senior" ? "Senior" : "Junior";
+			} else {
+				row[col] = cells[i];
+			}
+		});
+		return row;
+	}).filter((r) => r.team_name || bulkRowHasData(r));
+}
 
 // ─── Types & pure helpers ──────────────────────────────────────────────────────
 
@@ -91,7 +170,7 @@ export function AdminPage() {
 	const navigate = useNavigate();
 
 	const [category, setCategory] = useState<Category>("Junior");
-	const [activeTab, setActiveTab] = useState<"qualifiers" | "bracket">("qualifiers");
+	const [activeTab, setActiveTab] = useState<"qualifiers" | "bracket" | "teams">("qualifiers");
 
 	// Data
 	const [allTeams, setAllTeams] = useState<Team[]>([]);
@@ -426,13 +505,23 @@ export function AdminPage() {
 							</span>
 						)}
 					</button>
+					<button
+						onClick={() => setActiveTab("teams")}
+						className={`flex items-center gap-1.5 px-5 py-2.5 text-xs font-black uppercase tracking-widest transition-colors border-l border-white/10 ${
+							activeTab === "teams"
+								? "bg-editorial-gold text-editorial-ink"
+								: "text-white/60 hover:text-white hover:bg-white/5"
+						}`}
+					>
+						<Users size={12} /> Teams
+					</button>
 				</div>
 			</div>
 
 			{isLoading ? (
 				<div className="py-20 text-center text-sm text-gray-400">Loading…</div>
 			) : (
-				<div className="max-w-5xl mx-auto px-4 py-6 space-y-3">
+				<div className="w-full px-4 py-6 space-y-3">
 
 					{/* ─ QUALIFIERS TAB ─────────────────────────────────────── */}
 					{activeTab === "qualifiers" && (
@@ -776,9 +865,474 @@ export function AdminPage() {
 							)}
 						</>
 					)}
+
+					{/* ─ TEAMS TAB ──────────────────────────────────────────── */}
+					{activeTab === "teams" && (
+						<TeamsTab category={category} onTeamsChanged={loadData} />
+					)}
 				</div>
 			)}
 		</div>
+	);
+}
+
+// ─── TeamsTab ─────────────────────────────────────────────────────────────────
+
+function TeamsTab({ category, onTeamsChanged }: { category: Category; onTeamsChanged: () => void }) {
+	const [teams, setTeams] = useState<Team[]>([]);
+	const [isLoading, setIsLoading] = useState(true);
+	const [editingId, setEditingId] = useState<string | null>(null);
+	const [editDraft, setEditDraft] = useState<Partial<Team>>({});
+	const [editError, setEditError] = useState<string | null>(null);
+	const [bulkRows, setBulkRows] = useState<BulkRow[]>(() => Array.from({ length: 5 }, () => makeEmptyBulkRow(category)));
+	const [bulkSaving, setBulkSaving] = useState(false);
+	const [bulkError, setBulkError] = useState<string | null>(null);
+	const [bulkSuccess, setBulkSuccess] = useState<string | null>(null);
+	const [panelTeamsOpen, setPanelTeamsOpen] = useState(true);
+	const [panelBulkOpen, setPanelBulkOpen] = useState(true);
+	const fileRef = useRef<HTMLInputElement>(null);
+
+	async function loadTeams() {
+		setIsLoading(true);
+		const { data } = await supabase.from("teams").select("*").eq("category", category).order("team_name");
+		setTeams((data as Team[]) ?? []);
+		setIsLoading(false);
+	}
+
+	useEffect(() => { loadTeams(); }, [category]);
+
+	// Reset bulk row category defaults when category prop changes
+	useEffect(() => {
+		setBulkRows((rows) =>
+			rows.map((r) => (!r.team_name && !bulkRowHasData(r)) ? { ...r, category } : r),
+		);
+	}, [category]);
+
+	// ── Edit existing team ──────────────────────────────────────────────────────
+
+	async function handleSaveEdit() {
+		if (!editingId) return;
+		if (!editDraft.team_name?.trim()) { setEditError("Team name is required."); return; }
+		const membersRaw = typeof editDraft.team_members === "string"
+			? (editDraft.team_members as unknown as string).split(",").map((s) => s.trim()).filter(Boolean)
+			: (editDraft.team_members ?? null);
+		const { error } = await supabase.from("teams").update({
+			team_name: editDraft.team_name.trim(),
+			country: editDraft.country || null,
+			coach_name: editDraft.coach_name || null,
+			team_members: membersRaw?.length ? membersRaw : null,
+			team_description: editDraft.team_description || null,
+		}).eq("id", editingId);
+		if (error) { setEditError(error.message); return; }
+		setEditingId(null); setEditDraft({}); setEditError(null);
+		loadTeams(); onTeamsChanged();
+	}
+
+	async function handleDelete(id: string, name: string) {
+		if (!confirm(`Delete "${name}"? This cannot be undone and will affect any matches using this team.`)) return;
+		const { error } = await supabase.from("teams").delete().eq("id", id);
+		if (!error) { loadTeams(); onTeamsChanged(); }
+	}
+
+	// ── Bulk add ────────────────────────────────────────────────────────────────
+
+	function handleBulkChange(rowIndex: number, col: BulkCol, value: string) {
+		setBulkRows((prev) => {
+			const next = [...prev];
+			next[rowIndex] = { ...next[rowIndex], [col]: value };
+			// Auto-append a new row when something is typed in the last row
+			if (rowIndex === next.length - 1 && value.trim()) {
+				next.push(makeEmptyBulkRow(category));
+			}
+			return next;
+		});
+		setBulkSuccess(null);
+	}
+
+	function handleBulkKeyDown(e: React.KeyboardEvent, rowIndex: number, colIndex: number) {
+		const totalRows = bulkRows.length;
+		if (e.key === "Tab") {
+			e.preventDefault();
+			const nextCol = colIndex + 1;
+			if (nextCol < BULK_INPUT_COUNT) focusBulkCell(rowIndex, nextCol);
+			else if (rowIndex + 1 < totalRows) focusBulkCell(rowIndex + 1, 0);
+		} else if (e.key === "Enter" || e.key === "ArrowDown") {
+			e.preventDefault();
+			if (rowIndex + 1 < totalRows) focusBulkCell(rowIndex + 1, colIndex);
+		} else if (e.key === "ArrowUp") {
+			e.preventDefault();
+			if (rowIndex > 0) focusBulkCell(rowIndex - 1, colIndex);
+		}
+	}
+
+	function handleCsvUpload(e: React.ChangeEvent<HTMLInputElement>) {
+		const file = e.target.files?.[0];
+		if (!file) return;
+		const reader = new FileReader();
+		reader.onload = (ev) => {
+			const text = ev.target?.result as string;
+			const parsed = parseCSV(text, category);
+			if (parsed.length === 0) { setBulkError("No valid rows found in CSV. Check headers: team_name, category, country, coach_name, team_members, team_description"); return; }
+			setBulkRows((prev) => {
+				const nonEmpty = prev.filter((r) => r.team_name.trim() || bulkRowHasData(r));
+				return [...nonEmpty, ...parsed, makeEmptyBulkRow(category)];
+			});
+			setBulkError(null);
+		};
+		reader.readAsText(file);
+		e.target.value = "";
+	}
+
+	async function handleBulkSubmit() {
+		const valid = bulkRows.filter((r) => r.team_name.trim());
+		if (valid.length === 0) { setBulkError("No rows with team names to save."); return; }
+		setBulkSaving(true); setBulkError(null);
+		const rows = valid.map((r) => ({
+			team_name: r.team_name.trim(),
+			category: r.category,
+			country: r.country.trim() || null,
+			coach_name: r.coach_name.trim() || null,
+			team_members: r.team_members.trim()
+				? r.team_members.split(",").map((s) => s.trim()).filter(Boolean)
+				: null,
+			team_description: r.team_description.trim() || null,
+		}));
+		const { error } = await supabase.from("teams").insert(rows);
+		setBulkSaving(false);
+		if (error) { setBulkError(error.message); return; }
+		setBulkSuccess(`${valid.length} team(s) added successfully.`);
+		setBulkRows(Array.from({ length: 5 }, () => makeEmptyBulkRow(category)));
+		loadTeams(); onTeamsChanged();
+	}
+
+	// ── Render ──────────────────────────────────────────────────────────────────
+
+	const readyCount = bulkRows.filter((r) => r.team_name.trim()).length;
+
+	return (
+		<>
+			{/* Stats strip */}
+			<div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest text-gray-400 px-1 pb-1 flex-wrap">
+				<Users size={11} />
+				<span>{teams.length} {category} team{teams.length !== 1 ? "s" : ""} registered</span>
+			</div>
+
+			{/* Existing teams */}
+			<CollapsiblePanel
+				title={`${category} Teams (${teams.length})`}
+				open={panelTeamsOpen}
+				onToggle={() => setPanelTeamsOpen((v) => !v)}
+			>
+				{isLoading ? (
+					<div className="p-6 text-center text-sm text-gray-400">Loading…</div>
+				) : teams.length === 0 ? (
+					<div className="p-6 text-center text-sm text-gray-400">No {category} teams yet. Add some below.</div>
+				) : (
+					<div className="overflow-x-auto">
+						<table className="w-full text-sm border-collapse">
+							<thead>
+								<tr className="bg-editorial-ink text-white text-[10px] uppercase tracking-widest">
+									<th className="px-3 py-2 text-left font-black w-8">#</th>
+									<th className="px-3 py-2 text-left font-black min-w-[160px]">Team Name</th>
+									<th className="px-3 py-2 text-left font-black w-28">Country</th>
+									<th className="px-3 py-2 text-left font-black w-36">Coach</th>
+									<th className="px-3 py-2 text-left font-black w-44">Members</th>
+									<th className="px-2 py-2 text-center font-black w-20">Actions</th>
+								</tr>
+							</thead>
+							<tbody>
+								{teams.map((team, i) => {
+									const isEditing = editingId === team.id;
+									const rowClass = `border-b border-gray-100 ${i % 2 === 0 ? "bg-white" : "bg-editorial-bg/50"}`;
+									return (
+										<tr key={team.id} className={rowClass}>
+											<td className="px-3 py-2 text-[10px] text-gray-300 font-mono">{i + 1}</td>
+											{isEditing ? (
+												<>
+													<td className="px-2 py-1.5">
+														<input
+															autoFocus
+															value={editDraft.team_name ?? ""}
+															onChange={(e) => setEditDraft((d) => ({ ...d, team_name: e.target.value }))}
+															className="w-full border-2 border-editorial-ink px-2 py-1 text-sm font-semibold focus:outline-none focus:border-editorial-gold"
+														/>
+													</td>
+													<td className="px-2 py-1.5">
+														<input
+															value={editDraft.country ?? ""}
+															onChange={(e) => setEditDraft((d) => ({ ...d, country: e.target.value }))}
+															placeholder="—"
+															className="w-full border border-gray-200 px-2 py-1 text-sm focus:outline-none focus:border-editorial-gold"
+														/>
+													</td>
+													<td className="px-2 py-1.5">
+														<input
+															value={editDraft.coach_name ?? ""}
+															onChange={(e) => setEditDraft((d) => ({ ...d, coach_name: e.target.value }))}
+															placeholder="—"
+															className="w-full border border-gray-200 px-2 py-1 text-sm focus:outline-none focus:border-editorial-gold"
+														/>
+													</td>
+													<td className="px-2 py-1.5">
+														<input
+															value={Array.isArray(editDraft.team_members) ? editDraft.team_members.join(", ") : (editDraft.team_members as unknown as string) ?? ""}
+															onChange={(e) => setEditDraft((d) => ({ ...d, team_members: e.target.value as unknown as string[] }))}
+															placeholder="Alice, Bob, …"
+															className="w-full border border-gray-200 px-2 py-1 text-sm focus:outline-none focus:border-editorial-gold"
+														/>
+													</td>
+													<td className="px-2 py-1.5">
+														<div className="flex gap-1.5 items-center justify-center flex-wrap">
+															<button onClick={handleSaveEdit} className="px-3 py-1 text-[10px] font-black uppercase tracking-wider bg-editorial-green text-white hover:opacity-80 transition-opacity">
+																Save
+															</button>
+															<button onClick={() => { setEditingId(null); setEditDraft({}); setEditError(null); }} className="px-3 py-1 text-[10px] text-gray-400 border border-gray-200 hover:border-editorial-ink transition-colors">
+																Cancel
+															</button>
+														</div>
+													</td>
+												</>
+											) : (
+												<>
+													<td className="px-3 py-2.5 font-semibold">{team.team_name}</td>
+													<td className="px-3 py-2.5 text-xs text-gray-500">{team.country ?? <span className="text-gray-300">—</span>}</td>
+													<td className="px-3 py-2.5 text-xs text-gray-500">{team.coach_name ?? <span className="text-gray-300">—</span>}</td>
+													<td className="px-3 py-2.5 text-xs text-gray-500 max-w-[176px] truncate">{team.team_members?.join(", ") ?? <span className="text-gray-300">—</span>}</td>
+													<td className="px-2 py-2.5 text-center">
+														<div className="flex items-center justify-center gap-2">
+															<button
+																onClick={() => { setEditingId(team.id); setEditDraft({ ...team }); setEditError(null); }}
+																className="p-1 text-gray-300 hover:text-editorial-ink transition-colors"
+																title="Edit"
+															>
+																<Pencil size={13} />
+															</button>
+															<button
+																onClick={() => handleDelete(team.id, team.team_name)}
+																className="p-1 text-gray-300 hover:text-red-500 transition-colors"
+																title="Delete"
+															>
+																<Trash2 size={13} />
+															</button>
+														</div>
+													</td>
+												</>
+											)}
+										</tr>
+									);
+								})}
+							</tbody>
+						</table>
+						{editError && (
+							<p className="px-4 py-2 text-xs text-red-600 flex items-center gap-1.5 border-t border-red-100">
+								<AlertCircle size={11} /> {editError}
+							</p>
+						)}
+					</div>
+				)}
+			</CollapsiblePanel>
+
+			{/* Bulk add */}
+			<CollapsiblePanel
+				title="Bulk Add Teams"
+				open={panelBulkOpen}
+				onToggle={() => setPanelBulkOpen((v) => !v)}
+				accent
+			>
+				<div className="p-4 space-y-3">
+					{/* CSV upload row */}
+					<div className="flex items-start justify-between gap-3 flex-wrap">
+						<div className="space-y-0.5">
+							<p className="text-xs text-gray-600 font-semibold">Type directly or upload a CSV to populate this table.</p>
+							<p className="text-[10px] text-gray-400">CSV headers: <code className="bg-gray-100 px-1">team_name, category, country, coach_name, team_members, team_description</code></p>
+							<p className="text-[10px] text-gray-400">team_members: comma-separated names within the cell. Use quotes in CSV if needed.</p>
+						</div>
+						<div className="flex items-center gap-2 shrink-0">
+							<input ref={fileRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleCsvUpload} />
+							<button
+								onClick={() => fileRef.current?.click()}
+								className="flex items-center gap-1.5 text-xs font-semibold border border-gray-200 px-3 py-1.5 hover:border-editorial-ink hover:text-editorial-ink transition-colors"
+							>
+								<Upload size={12} /> Upload CSV
+							</button>
+							<button
+								onClick={() => { setBulkRows(Array.from({ length: 5 }, () => makeEmptyBulkRow(category))); setBulkError(null); setBulkSuccess(null); }}
+								className="text-[10px] text-gray-400 underline hover:text-red-500 transition-colors"
+							>
+								Clear all
+							</button>
+						</div>
+					</div>
+
+					{/* Spreadsheet table */}
+					<div className="overflow-x-auto border border-gray-200">
+						<table className="w-full text-sm border-collapse">
+							<thead>
+								<tr className="bg-editorial-ink text-white text-[10px] uppercase tracking-widest">
+									<th className="px-2 py-2 text-center font-black w-8">#</th>
+									<th className="px-3 py-2 text-left font-black min-w-[180px]">
+										Team Name <span className="text-editorial-gold/80">*</span>
+									</th>
+									<th className="px-3 py-2 text-left font-black w-28">Category</th>
+									<th className="px-3 py-2 text-left font-black w-28">Country</th>
+									<th className="px-3 py-2 text-left font-black w-36">Coach</th>
+									<th className="px-3 py-2 text-left font-black w-48">Members (comma-sep)</th>
+									<th className="px-3 py-2 text-left font-black w-48">Description</th>
+									<th className="w-8" />
+								</tr>
+							</thead>
+							<tbody>
+								{bulkRows.map((row, rowIndex) => {
+									const hasData = bulkRowHasData(row);
+									const nameEmpty = !row.team_name.trim();
+									const nameError = hasData && nameEmpty;
+									const rowFilled = row.team_name.trim() || hasData;
+
+									return (
+										<tr key={row._id} className={`border-b border-gray-100 ${rowIndex % 2 === 0 ? "bg-white" : "bg-editorial-bg/30"}`}>
+											<td className="px-2 py-0 text-[10px] text-gray-300 font-mono text-center">{rowIndex + 1}</td>
+
+											{/* Team Name */}
+											<td className={nameError ? "bg-red-50" : ""}>
+												<input
+													type="text"
+													data-bulk-row={rowIndex}
+													data-bulk-col={0}
+													value={row.team_name}
+													placeholder={nameError ? "Name required!" : "Team name…"}
+													onChange={(e) => handleBulkChange(rowIndex, "team_name", e.target.value)}
+													onKeyDown={(e) => handleBulkKeyDown(e, rowIndex, 0)}
+													className={`w-full px-3 py-2 bg-transparent text-sm font-semibold focus:outline-none focus:bg-editorial-gold/10 placeholder:text-gray-300 ${
+														nameError ? "text-red-600 placeholder:text-red-400 placeholder:font-bold" : ""
+													}`}
+												/>
+											</td>
+
+											{/* Category */}
+											<td>
+												<select
+													data-bulk-row={rowIndex}
+													data-bulk-col={1}
+													value={row.category}
+													onChange={(e) => handleBulkChange(rowIndex, "category", e.target.value)}
+													className="w-full px-3 py-2 bg-transparent text-sm font-semibold focus:outline-none focus:bg-editorial-gold/10 appearance-none cursor-pointer"
+												>
+													<option value="Junior">Junior</option>
+													<option value="Senior">Senior</option>
+												</select>
+											</td>
+
+											{/* Country */}
+											<td className={!row.country && rowFilled ? "bg-amber-50/60" : ""}>
+												<input
+													type="text"
+													data-bulk-row={rowIndex}
+													data-bulk-col={2}
+													value={row.country}
+													placeholder="—"
+													onChange={(e) => handleBulkChange(rowIndex, "country", e.target.value)}
+													onKeyDown={(e) => handleBulkKeyDown(e, rowIndex, 2)}
+													className="w-full px-3 py-2 bg-transparent text-sm focus:outline-none focus:bg-editorial-gold/10 placeholder:text-gray-300"
+												/>
+											</td>
+
+											{/* Coach */}
+											<td className={!row.coach_name && rowFilled ? "bg-amber-50/60" : ""}>
+												<input
+													type="text"
+													data-bulk-row={rowIndex}
+													data-bulk-col={3}
+													value={row.coach_name}
+													placeholder="—"
+													onChange={(e) => handleBulkChange(rowIndex, "coach_name", e.target.value)}
+													onKeyDown={(e) => handleBulkKeyDown(e, rowIndex, 3)}
+													className="w-full px-3 py-2 bg-transparent text-sm focus:outline-none focus:bg-editorial-gold/10 placeholder:text-gray-300"
+												/>
+											</td>
+
+											{/* Members */}
+											<td>
+												<input
+													type="text"
+													data-bulk-row={rowIndex}
+													data-bulk-col={4}
+													value={row.team_members}
+													placeholder="Alice, Bob, …"
+													onChange={(e) => handleBulkChange(rowIndex, "team_members", e.target.value)}
+													onKeyDown={(e) => handleBulkKeyDown(e, rowIndex, 4)}
+													className="w-full px-3 py-2 bg-transparent text-sm focus:outline-none focus:bg-editorial-gold/10 placeholder:text-gray-300"
+												/>
+											</td>
+
+											{/* Description */}
+											<td>
+												<input
+													type="text"
+													data-bulk-row={rowIndex}
+													data-bulk-col={5}
+													value={row.team_description}
+													placeholder="—"
+													onChange={(e) => handleBulkChange(rowIndex, "team_description", e.target.value)}
+													onKeyDown={(e) => handleBulkKeyDown(e, rowIndex, 5)}
+													className="w-full px-3 py-2 bg-transparent text-sm focus:outline-none focus:bg-editorial-gold/10 placeholder:text-gray-300"
+												/>
+											</td>
+
+											{/* Delete row */}
+											<td className="px-1 text-center">
+												<button
+													tabIndex={-1}
+													onClick={() => setBulkRows((prev) => prev.length > 1 ? prev.filter((_, i) => i !== rowIndex) : prev)}
+													className="text-gray-200 hover:text-red-400 transition-colors"
+													title="Remove row"
+												>
+													<Trash2 size={12} />
+												</button>
+											</td>
+										</tr>
+									);
+								})}
+							</tbody>
+						</table>
+					</div>
+
+					{/* Hints row */}
+					<div className="flex items-center gap-6 text-[10px] text-gray-400 flex-wrap">
+						<span><kbd className="font-mono bg-gray-100 px-1">Tab</kbd> next cell</span>
+						<span><kbd className="font-mono bg-gray-100 px-1">Enter</kbd> / <kbd className="font-mono bg-gray-100 px-1">↓</kbd> next row</span>
+						<span><kbd className="font-mono bg-gray-100 px-1">↑</kbd> prev row</span>
+						<button
+							onClick={() => setBulkRows((prev) => [...prev, makeEmptyBulkRow(category)])}
+							className="ml-auto flex items-center gap-1 text-gray-400 hover:text-editorial-ink transition-colors"
+						>
+							<Plus size={11} /> Add row
+						</button>
+					</div>
+
+					{bulkError && (
+						<p className="text-xs text-red-600 flex items-center gap-1.5">
+							<AlertCircle size={11} /> {bulkError}
+						</p>
+					)}
+					{bulkSuccess && (
+						<p className="text-xs text-editorial-green font-semibold">{bulkSuccess}</p>
+					)}
+
+					<div className="flex items-center gap-3 pt-1 flex-wrap">
+						<button
+							onClick={handleBulkSubmit}
+							disabled={bulkSaving || readyCount === 0}
+							className="border-2 border-editorial-ink bg-editorial-gold text-editorial-ink px-5 py-2 text-xs font-black uppercase tracking-widest hover:bg-editorial-ink hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]"
+						>
+							{bulkSaving ? "Saving…" : `Save ${readyCount || ""} Team${readyCount !== 1 ? "s" : ""} →`}
+						</button>
+						{readyCount > 0 && (
+							<span className="text-xs text-gray-400">{readyCount} row{readyCount !== 1 ? "s" : ""} with team names ready</span>
+						)}
+					</div>
+				</div>
+			</CollapsiblePanel>
+		</>
 	);
 }
 

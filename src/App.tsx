@@ -1,28 +1,91 @@
-import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, BookOpen, RotateCcw } from "lucide-react";
 import { AnimatePresence } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
 import ReactGA from "react-ga4";
+import { BookOpen, RotateCcw } from "lucide-react";
 import { BracketList } from "./components/BracketList";
-import { BracketPhaseView } from "./components/BracketPhaseView";
 import { CategoryToggle } from "./components/CategoryToggle";
 import { LoadingSpinner } from "./components/LoadingSpinner";
+import { LockedScoreboardScreen } from "./components/LockedScoreboardScreen";
 import { MatchDetailView } from "./components/MatchDetailView";
 import { PhaseNavigation } from "./components/PhaseNavigation";
 import { QualifiersTable } from "./components/QualifiersTable";
+import type { SpectatorStanding } from "./components/QualifiersTable";
 import { RulesPage } from "./components/RulesPage";
 import { useEffects } from "./hooks/useEffects";
-import { getNearestCachedPhase, setCacheData } from "./lib/cacheService";
-import type { Match } from "./lib/matchService";
-import { transformSheetDataToMatches } from "./lib/matchService";
+import { supabase } from "./lib/supabase";
+import type { Category, MatchWithTeams, Phase } from "./lib/database.types";
+import type { Match as LegacyMatch } from "./lib/matchService";
 
-declare const gapi: any;
+// ─── Constants ────────────────────────────────────────────────────────────────
 
-interface BracketPhase {
-	phaseName: string;
-	junior: Match[];
-	senior: Match[];
+const PHASES: Phase[] = [
+	"Qualifiers",
+	"Pre-Quarterfinals",
+	"Quarterfinals",
+	"Semifinals",
+	"Third Place",
+	"Finals",
+];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+// rankByTotal=true for Pre-Quarters/Quarters (rulebook §h.4.2: ranked by total points)
+// rankByTotal=false for Qualifiers (ranked by best single round, total as tie-breaker)
+function computeSpectatorStandings(matches: MatchWithTeams[], rankByTotal = false): SpectatorStanding[] {
+	const map = new Map<string, {
+		team_name: string;
+		r1: number | null; r2: number | null; r3: number | null; r4: number | null;
+		best_round: number; total: number;
+	}>();
+
+	function processTeam(
+		id: string | null, team: { team_name: string } | null,
+		r1: number | null, r2: number | null, r3: number | null, r4: number | null,
+	) {
+		if (!id || !team) return;
+		const scored = [r1, r2, r3, r4].filter((v): v is number => v !== null && v > 0);
+		const e = map.get(id) ?? { team_name: team.team_name, r1: null, r2: null, r3: null, r4: null, best_round: 0, total: 0 };
+		if (e.r1 === null && r1 !== null) e.r1 = r1;
+		if (e.r2 === null && r2 !== null) e.r2 = r2;
+		if (e.r3 === null && r3 !== null) e.r3 = r3;
+		if (e.r4 === null && r4 !== null) e.r4 = r4;
+		if (scored.length > 0) {
+			e.best_round = Math.max(e.best_round, ...scored);
+			e.total += scored.reduce((a, b) => a + b, 0);
+		}
+		map.set(id, e);
+	}
+
+	for (const m of matches) {
+		processTeam(m.team_1_id, m.team_1, m.team_1_r1, m.team_1_r2, m.team_1_r3, m.team_1_r4);
+		processTeam(m.team_2_id, m.team_2, m.team_2_r1, m.team_2_r2, m.team_2_r3, m.team_2_r4);
+	}
+
+	return Array.from(map.values())
+		.sort((a, b) => rankByTotal
+			? (b.total !== a.total ? b.total - a.total : b.best_round - a.best_round)
+			: (b.best_round !== a.best_round ? b.best_round - a.best_round : b.total - a.total))
+		.map((e, i) => ({ ...e, rank: i + 1 }));
 }
+
+function toMatch(m: MatchWithTeams): LegacyMatch {
+	return {
+		id: m.id,
+		team1: m.team_1?.team_name ?? "TBD",
+		team2: m.team_2?.team_name ?? "TBD",
+		team1Score: m.team_1_final_points,
+		team2Score: m.team_2_final_points,
+		team1R1: m.team_1_r1,
+		team1R2: m.team_1_r2,
+		team2R1: m.team_2_r1,
+		team2R2: m.team_2_r2,
+		winner: m.winner_id ? (m.winner_id === m.team_1_id ? 0 : 1) : null,
+		station: m.table_number !== null ? String(m.table_number) : String(m.match_order),
+		isBye: false,
+	};
+}
+
+// ─── App ──────────────────────────────────────────────────────────────────────
 
 export default function App() {
 	useEffect(() => {
@@ -30,440 +93,162 @@ export default function App() {
 		ReactGA.send({ hitType: "pageview", page: window.location.pathname });
 	}, []);
 
-	const [currentPhaseSheetName, setCurrentPhaseSheetName] = useState<string>(
-		() => {
-			return (
-				localStorage.getItem("currentPhaseSheetName") || "QUALIFIERS"
-			);
-		},
-	);
-	const [currentPhase, setCurrentPhase] = useState<number>(0);
-	const [category, setCategory] = useState<"junior" | "senior">(() => {
-		const saved = localStorage.getItem("selectedCategory");
-		return (saved as "junior" | "senior") || "junior";
+	const [phaseIndex, setPhaseIndex] = useState(() => {
+		const saved = localStorage.getItem("spectator_phase_idx");
+		const n = saved ? parseInt(saved, 10) : 0;
+		return isNaN(n) ? 0 : Math.max(0, Math.min(n, PHASES.length - 1));
 	});
-	const [selectedMatch, setSelectedMatch] = useState<any>(null);
-	const [shared, setShared] = useState(false);
-	const [isInfoOpen, setIsInfoOpen] = useState(false);
-	const [currentPage, setCurrentPage] = useState<"bracket" | "rules">(
-		"bracket",
-	);
-	const [refreshCount, setRefreshCount] = useState(0);
-	const [lastRefreshTime, setLastRefreshTime] = useState<number>(0);
-	const [teamCount, setTeamCount] = useState(0);
-	const [isViewingCachedData, setIsViewingCachedData] = useState(false);
-	const [fallbackPhaseMessage, setFallbackPhaseMessage] = useState<
-		string | null
-	>(null);
+	// CategoryToggle uses lowercase; Supabase uses capitalized
+	const [category, setCategory] = useState<"junior" | "senior">(() => {
+		return (localStorage.getItem("selectedCategory") as "junior" | "senior") ?? "junior";
+	});
+	const [matches, setMatches] = useState<MatchWithTeams[]>([]);
+	const [isLoading, setIsLoading] = useState(true);
+	const [advanceCount, setAdvanceCount] = useState(0);
+	const [phaseLocks, setPhaseLocks] = useState<Record<string, string>>({});
+	const [selectedMatch, setSelectedMatch] = useState<LegacyMatch | null>(null);
+	const [currentPage, setCurrentPage] = useState<"bracket" | "rules">("bracket");
 	const { effects, triggerEffect } = useEffects();
 
-	// Persist category to localStorage
+	const currentPhase = PHASES[phaseIndex];
+	const supabaseCategory: Category = category === "junior" ? "Junior" : "Senior";
+	const isQualifiers = currentPhase === "Qualifiers";
+	// Pre-Quarters and Quarters are NOT H2H — teams compete independently, ranked by total (§h.4.2-4.3)
+	const isLeaderboardPhase = isQualifiers || currentPhase === "Pre-Quarterfinals" || currentPhase === "Quarterfinals";
+	// How many teams advance from each leaderboard phase
+	const phaseAdvanceCount = isQualifiers ? advanceCount
+		: currentPhase === "Pre-Quarterfinals" ? 8
+		: currentPhase === "Quarterfinals" ? 4
+		: 0;
+	const lockType = phaseLocks[`${currentPhase}_${supabaseCategory}`] ?? null;
+
+	useEffect(() => { localStorage.setItem("selectedCategory", category); }, [category]);
+	useEffect(() => { localStorage.setItem("spectator_phase_idx", String(phaseIndex)); }, [phaseIndex]);
+
+	// ── Data loading ──────────────────────────────────────────────────────────
+
+	async function loadMatches() {
+		setIsLoading(true);
+		const { data, error } = await supabase
+			.from("matches")
+			.select("*, team_1:team_1_id(id,team_name,category), team_2:team_2_id(id,team_name,category), winner:winner_id(id,team_name,category)")
+			.eq("phase", currentPhase)
+			.eq("category", supabaseCategory)
+			.order("match_order", { ascending: true });
+
+		if (!error) setMatches((data as MatchWithTeams[]) ?? []);
+		setIsLoading(false);
+	}
+
+	useEffect(() => { loadMatches(); }, [phaseIndex, category]);
+
+	// Realtime: live score updates for current view
 	useEffect(() => {
-		localStorage.setItem("selectedCategory", category);
-	}, [category]);
+		const channel = supabase
+			.channel(`spectator-${currentPhase}-${supabaseCategory}`)
+			.on("postgres_changes", {
+				event: "*", schema: "public", table: "matches",
+				filter: `phase=eq.${currentPhase}`,
+			}, () => { loadMatches(); })
+			.subscribe();
+		return () => { supabase.removeChannel(channel); };
+	}, [phaseIndex, category]);
 
-	// Persist phase sheet name to localStorage
+	// Load and subscribe to phase locks
 	useEffect(() => {
-		localStorage.setItem("currentPhaseSheetName", currentPhaseSheetName);
-	}, [currentPhaseSheetName]);
+		supabase.from("phase_locks").select("*").then(({ data }) => {
+			if (data) {
+				const locks: Record<string, string> = {};
+				(data as any[]).forEach((l) => { locks[`${l.phase}_${l.category}`] = l.lock_type; });
+				setPhaseLocks(locks);
+			}
+		});
 
-	// Reset refresh count when phase or category changes
-	useEffect(() => {
-		setRefreshCount(0);
-		setLastRefreshTime(0);
-		setFallbackPhaseMessage(null);
-	}, [currentPhase, category]);
-
-	// Fetch team count on mount to determine PRE_QUARTERS visibility
-	useEffect(() => {
-		const fetchTeamCount = async () => {
-			const spreadSheetId =
-				category == "senior"
-					? import.meta.env.VITE_SENIOR_SPREADSHEET_ID
-					: import.meta.env.VITE_JUNIOR_SPREADSHEET_ID;
-
-			const promise = new Promise<number>((resolve) => {
-				// Check if gapi is available (requires internet connection to load)
-				if (typeof gapi === "undefined") {
-					console.warn(
-						"Google API not available - offline or network error",
-					);
-					resolve(0);
-					return;
-				}
-
-				try {
-					gapi.load("client", () => {
-						gapi.client
-							.init({
-								apiKey: import.meta.env.VITE_GOOGLE_API_KEY,
-								discoveryDocs: [
-									"https://sheets.googleapis.com/$discovery/rest?version=v4",
-								],
-							})
-							.then(() => {
-								return (
-									gapi.client as any
-								).sheets.spreadsheets.values.get({
-									spreadsheetId: spreadSheetId,
-									range: "QUALIFIERS!I2:I2",
-									valueRenderOption: "FORMATTED_VALUE",
-								});
-							})
-							.then((response: any) => {
-								const count =
-									response?.result?.values?.[0]?.[0];
-								resolve(count ? parseInt(count, 10) : 0);
-							})
-							.catch(() => resolve(0));
+		const lockChannel = supabase
+			.channel("spectator-phase-locks")
+			.on("postgres_changes", { event: "*", schema: "public", table: "phase_locks" }, (payload) => {
+				if (payload.eventType === "DELETE") {
+					const { phase, category: cat } = payload.old as any;
+					setPhaseLocks((prev) => {
+						const next = { ...prev };
+						delete next[`${phase}_${cat}`];
+						return next;
 					});
-				} catch (err) {
-					console.warn("Error loading team count:", err);
-					resolve(0);
-				}
-			});
-
-			const count = await promise;
-			setTeamCount(count);
-		};
-
-		fetchTeamCount();
-	}, [category]);
-
-	// Build phases dynamically based on team count
-	const PHASES = useMemo(() => {
-		const phases = [
-			{ phase: 0, sheetName: "QUALIFIERS", phaseName: "QUALIFIERS" },
-		];
-
-		// Add PRE_QUARTERS if team count >= 16
-		if (teamCount >= 16) {
-			phases.push({
-				phase: 1,
-				sheetName: "PRE_QUARTERS",
-				phaseName: "PRE-QUARTERS",
-			});
-		}
-
-		// Add remaining phases
-		const startPhase = teamCount >= 16 ? 2 : 1;
-		phases.push(
-			{
-				phase: startPhase,
-				sheetName: "QUARTERS",
-				phaseName: "QUARTER-FINALS",
-			},
-			{
-				phase: startPhase + 1,
-				sheetName: "SEMIS",
-				phaseName: "SEMI-FINALS",
-			},
-			{
-				phase: startPhase + 2,
-				sheetName: "THIRD_PLACE",
-				phaseName: "THIRD PLACE",
-			},
-			{
-				phase: startPhase + 3,
-				sheetName: "FINAL",
-				phaseName: "FINALS",
-			},
-		);
-
-		return phases;
-	}, [teamCount]);
-	const phase = PHASES[currentPhase];
-
-	// Update currentPhase index when PHASES changes or currentPhaseSheetName changes
-	useEffect(() => {
-		const index = PHASES.findIndex(
-			(p) => p.sheetName === currentPhaseSheetName,
-		);
-		// Only update if we found the phase - don't default to QUALIFIERS
-		// Trust the persisted currentPhaseSheetName and wait for PHASES to be ready
-		if (index !== -1) {
-			setCurrentPhase(index);
-		}
-	}, [PHASES, currentPhaseSheetName]);
-
-	const spreadSheetId =
-		category == "senior"
-			? import.meta.env.VITE_SENIOR_SPREADSHEET_ID
-			: import.meta.env.VITE_JUNIOR_SPREADSHEET_ID;
-
-	const fetchData = async () => {
-		if (!phase) {
-			setCurrentPhase(0);
-			return { junior: [], senior: [] };
-		}
-
-		// Check if we have data for the requested phase, if not redirect to nearest cached
-		if (typeof gapi === "undefined") {
-			const nearestCache = getNearestCachedPhase(
-				phase.sheetName,
-				category,
-			);
-			if (nearestCache) {
-				// If nearest cache is different from requested phase, redirect to it
-				if (nearestCache.phase !== phase.sheetName) {
-					setFallbackPhaseMessage(
-						`No data available for ${phase.sheetName}, switching to ${nearestCache.phase}`,
-					);
-					setCurrentPhaseSheetName(nearestCache.phase);
-					return { junior: [], senior: [] };
 				} else {
-					// We have the exact phase cached, use it
-					setIsViewingCachedData(true);
-					setFallbackPhaseMessage(null);
-					return nearestCache.data;
+					const { phase, category: cat, lock_type } = payload.new as any;
+					setPhaseLocks((prev) => ({ ...prev, [`${phase}_${cat}`]: lock_type }));
 				}
-			} else {
-				throw new Error("Offline and no cached data available");
-			}
-		}
+			})
+			.subscribe();
+		return () => { supabase.removeChannel(lockChannel); };
+	}, []);
 
-		const response = new Promise<{
-			junior: string[][];
-			senior: string[][];
-		}>((resolve, reject) => {
-			try {
-				gapi.load("client", () => {
-					gapi.client
-						.init({
-							apiKey: import.meta.env.VITE_GOOGLE_API_KEY,
-							discoveryDocs: [
-								"https://sheets.googleapis.com/$discovery/rest?version=v4",
-							],
-						})
-						.then(() => {
-							// Fetch both junior and senior divisions
-							return Promise.all([
-								(
-									gapi.client as any
-								).sheets.spreadsheets.values.get({
-									spreadsheetId: spreadSheetId,
-									range: `${phase.sheetName}!A2:I100`,
-									valueRenderOption: "FORMATTED_VALUE",
-								}),
-							]);
-						})
-						.then((responses: any[]) => {
-							const sheetData =
-								responses[0]?.result?.values || [];
-							const result = {
-								junior: sheetData,
-								senior: sheetData,
-							};
-							// Save to cache on successful fetch
-							setCacheData(phase.sheetName, category, result);
-							setIsViewingCachedData(false);
-							setFallbackPhaseMessage(null);
-							resolve(result);
-						})
-						.catch((err: any) => {
-							// Try to use nearest cached data on error
-							const nearestCache = getNearestCachedPhase(
-								phase.sheetName,
-								category,
-							);
-							if (nearestCache) {
-								// If nearest cache is different, redirect instead of showing mismatched data
-								if (nearestCache.phase !== phase.sheetName) {
-									setFallbackPhaseMessage(
-										`Error loading ${phase.sheetName}, switching to cached ${nearestCache.phase}`,
-									);
-									setCurrentPhaseSheetName(
-										nearestCache.phase,
-									);
-									resolve({ junior: [], senior: [] });
-								} else {
-									// Have the exact phase cached
-									setIsViewingCachedData(true);
-									setFallbackPhaseMessage(null);
-									resolve(nearestCache.data);
-								}
-							} else {
-								setCurrentPhase(0);
-								reject(err);
-							}
-						});
-				});
-			} catch (err) {
-				console.warn("Error calling gapi:", err);
-				// Try nearest cache as fallback
-				const nearestCache = getNearestCachedPhase(
-					phase.sheetName,
-					category,
-				);
-				if (nearestCache) {
-					if (nearestCache.phase !== phase.sheetName) {
-						setFallbackPhaseMessage(
-							`Error loading ${phase.sheetName}, switching to cached ${nearestCache.phase}`,
-						);
-						setCurrentPhaseSheetName(nearestCache.phase);
-						resolve({ junior: [], senior: [] });
-					} else {
-						setIsViewingCachedData(true);
-						setFallbackPhaseMessage(null);
-						resolve(nearestCache.data);
-					}
-				} else {
-					reject(err);
-				}
-			}
-		});
-
-		return response;
-	};
-
-	const query = useQuery({
-		queryKey: ["scores", currentPhase, category],
-		queryFn: fetchData,
-		enabled: true,
-		refetchInterval: 30000,
-		refetchOnWindowFocus: true,
-	});
-
-	// Reset phase to 0 if an error occurs
+	// Determine how many qualifier teams advance (based on what bracket phase exists)
 	useEffect(() => {
-		if (query.isError && currentPhase !== 0) {
-			setCurrentPhase(0);
-		}
-	}, [query.isError, currentPhase]);
+		if (!isQualifiers) return;
+		(async () => {
+			const checks: [Phase, number][] = [
+				["Pre-Quarterfinals", 16],
+				["Quarterfinals", 8],
+				["Semifinals", 4],
+			];
+			for (const [phase, count] of checks) {
+				const { count: n } = await supabase
+					.from("matches")
+					.select("*", { count: "exact", head: true })
+					.eq("phase", phase)
+					.eq("category", supabaseCategory);
+				if ((n ?? 0) > 0) { setAdvanceCount(count); return; }
+			}
+			setAdvanceCount(0);
+		})();
+	}, [isQualifiers, category]);
 
-	// Check if current phase is qualifiers
-	const isQualifiersPhase = phase?.sheetName === "QUALIFIERS";
+	// ── Navigation ────────────────────────────────────────────────────────────
 
-	// Check if current phase is a bracket phase with rankings view (QUARTERS or PRE_QUARTERS)
-	const isBracketPhaseWithRankings =
-		phase?.sheetName === "QUARTERS" || phase?.sheetName === "PRE_QUARTERS";
+	const prevPhase = () => setPhaseIndex((i) => (i - 1 + PHASES.length) % PHASES.length);
+	const nextPhase = () => setPhaseIndex((i) => (i + 1) % PHASES.length);
 
-	// Transform raw sheet data into bracket structure
-	const brackets = useMemo(() => {
-		if (!query.data) {
-			return {
-				phaseName: phase?.phaseName || "",
-				junior: [],
-				senior: [],
-			};
-		}
+	// ── Derived data ──────────────────────────────────────────────────────────
 
-		// For qualifiers phase, return raw data (no transformation needed)
-		if (isQualifiersPhase) {
-			return {
-				phaseName: phase?.phaseName || "",
-				junior: query.data.junior,
-				senior: query.data.senior,
-			};
-		}
+	const spectatorStandings = useMemo(
+		() => isLeaderboardPhase ? computeSpectatorStandings(matches, !isQualifiers) : [],
+		[matches, currentPhase],
+	);
+	const legacyMatches = useMemo(() => matches.map(toMatch), [matches]);
 
-		// For regular phases, transform into bracket structure
-		const juniorMatches = transformSheetDataToMatches(
-			query.data.junior,
-			`phase-${currentPhase}`,
-			"A",
-		);
-
-		const seniorMatches = transformSheetDataToMatches(
-			query.data.senior,
-			`phase-${currentPhase}`,
-			"C",
-		);
-
-		return {
-			phaseName: phase?.phaseName || "",
-			junior: juniorMatches,
-			senior: seniorMatches,
-		} as BracketPhase;
-	}, [query.data, currentPhase, phase, isQualifiersPhase]);
-
-	const activeMatches =
-		category === "junior" ? brackets.junior : brackets.senior;
-
-	const nextPhase = () => {
-		const nextIndex = (currentPhase + 1) % PHASES.length;
-		setCurrentPhaseSheetName(PHASES[nextIndex].sheetName);
-	};
-	const prevPhase = () => {
-		const prevIndex = (currentPhase - 1 + PHASES.length) % PHASES.length;
-		setCurrentPhaseSheetName(PHASES[prevIndex].sheetName);
-	};
-
-	const handleManualRefresh = () => {
-		const now = Date.now();
-		const timeSinceLastRefresh = now - lastRefreshTime;
-
-		// Allow max 3 refreshes via button
-		if (refreshCount >= 3) {
-			alert(
-				"Maximum refreshes reached. Data will auto-refresh every 60 seconds.",
-			);
-			return;
-		}
-
-		// Small cooldown between clicks (1 second)
-		if (timeSinceLastRefresh < 1000) {
-			return;
-		}
-
-		// Track refresh button click
-		ReactGA.event({
-			category: "User",
-			action: "Refresh Scores Clicked",
-		});
-
-		setRefreshCount((count) => count + 1);
-		setLastRefreshTime(now);
-		query.refetch();
-	};
+	// ── Render ────────────────────────────────────────────────────────────────
 
 	return (
 		<div className="min-h-screen bg-editorial-bg text-editorial-ink font-sans selection:bg-editorial-gold selection:text-white border-12 md:border-24 border-editorial-ink flex flex-col items-center bg-[url('https://www.transparenttextures.com/patterns/pinstriped-suit.png')] p-6 overflow-x-hidden relative">
-			{/* Navigation Buttons */}
+
+			{/* FAB buttons */}
 			<div className="fixed bottom-6 right-6 z-30 flex gap-3">
-				<div className="flex flex-col items-center gap-1">
-					<button
-						onClick={handleManualRefresh}
-						disabled={refreshCount >= 3 || query.isFetching}
-						title={`Refresh scores (${refreshCount}/3 used)`}
-						className={`border-2 border-editorial-ink p-3 transition-all shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] ${
-							refreshCount >= 3
-								? "bg-gray-200 text-gray-600 cursor-not-allowed"
-								: query.isFetching
-									? "bg-editorial-green text-white"
-									: "bg-editorial-gold text-editorial-ink hover:bg-editorial-ink hover:text-editorial-gold"
-						}`}
-						aria-label="Refresh scores"
-					>
-						<RotateCcw
-							size={24}
-							className={`font-bold ${query.isFetching ? "animate-spin" : ""}`}
-						/>
-					</button>
-				</div>
+				<button
+					onClick={loadMatches}
+					disabled={isLoading}
+					title="Refresh scores"
+					className={`border-2 border-editorial-ink p-3 transition-all shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] ${
+						isLoading
+							? "bg-editorial-green text-white"
+							: "bg-editorial-gold text-editorial-ink hover:bg-editorial-ink hover:text-editorial-gold"
+					}`}
+					aria-label="Refresh scores"
+				>
+					<RotateCcw size={24} className={isLoading ? "animate-spin" : ""} />
+				</button>
 				<button
 					onClick={() => {
-						ReactGA.event({
-							category: "User",
-							action: "Scoring Rules Button Clicked",
-						});
-						setCurrentPage(
-							currentPage === "bracket" ? "rules" : "bracket",
-						);
+						ReactGA.event({ category: "User", action: "Scoring Rules Button Clicked" });
+						setCurrentPage(currentPage === "bracket" ? "rules" : "bracket");
 					}}
 					className={`border-2 border-editorial-ink p-3 hover:bg-editorial-ink hover:text-editorial-gold transition-colors shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] ${
-						currentPage === "rules"
-							? "bg-editorial-ink text-white"
-							: "bg-editorial-gold text-editorial-ink"
+						currentPage === "rules" ? "bg-editorial-ink text-white" : "bg-editorial-gold text-editorial-ink"
 					}`}
-					aria-label="Toggle between bracket and rules"
-					title={
-						currentPage === "bracket"
-							? "View Scoring Rules"
-							: "View Bracket"
-					}
+					aria-label="Toggle rules"
+					title={currentPage === "bracket" ? "View Scoring Rules" : "View Bracket"}
 				>
-					<BookOpen size={24} className="font-bold" />
+					<BookOpen size={24} />
 				</button>
 			</div>
 
@@ -473,67 +258,34 @@ export default function App() {
 				<AnimatePresence mode="wait">
 					{!selectedMatch ? (
 						<div className="w-full flex flex-col items-center">
-							<CategoryToggle
-								category={category}
-								onChange={setCategory}
-							/>
+							<CategoryToggle category={category} onChange={setCategory} />
 
-							{/* Cached data / Fallback phase banner */}
-							{(isViewingCachedData || fallbackPhaseMessage) && (
-								<div className="w-full max-w-6xl mb-4 px-4 py-3 bg-amber-100 border-2 border-amber-600 flex items-center gap-3 text-amber-900">
-									<AlertCircle
-										size={20}
-										className="shrink-0"
-									/>
-									<div className="flex-1">
-										<p className="font-semibold">
-											{fallbackPhaseMessage
-												? "Phase unavailable"
-												: "Viewing offline data"}
-										</p>
-										<p className="text-sm">
-											{fallbackPhaseMessage ||
-												"Network connection issue detected. Showing cached information from previous load."}
-										</p>
-									</div>
-								</div>
-							)}
+							{isLoading && <LoadingSpinner />}
 
-							{query.isLoading && !isViewingCachedData && (
-								<LoadingSpinner />
-							)}
-							{query.error && !isViewingCachedData && (
-								<div className="text-center py-8">
-									<p className="text-sm text-red-600">
-										Error loading data
-									</p>
-								</div>
-							)}
-							{!query.isLoading && (
+							{!isLoading && (
 								<>
 									<PhaseNavigation
-										currentPhase={currentPhase}
-										phaseName={brackets.phaseName}
+										currentPhase={phaseIndex}
+										phaseName={currentPhase}
 										onPrevPhase={prevPhase}
 										onNextPhase={nextPhase}
 									/>
-									{isQualifiersPhase ? (
+
+									{lockType === "full" ? (
+										<LockedScoreboardScreen />
+									) : isLeaderboardPhase ? (
 										<QualifiersTable
-											data={brackets.junior as string[][]}
-											hasPreQuarters={teamCount >= 16}
+											standings={spectatorStandings}
+											advanceCount={phaseAdvanceCount}
+											scoresHidden={lockType === "scores"}
 										/>
-									) : isBracketPhaseWithRankings ? (
-										<BracketPhaseView
-											data={query.data?.[category] || []}
-											matches={activeMatches as Match[]}
-											rawData={query.data?.[category]}
-											sheetName={phase?.sheetName}
-											onSelectMatch={setSelectedMatch}
-										/>
+									) : matches.length === 0 ? (
+										<div className="text-center py-16 text-sm text-gray-400">
+											No matches scheduled for {currentPhase} yet.
+										</div>
 									) : (
 										<BracketList
-											matches={activeMatches as Match[]}
-											rawData={query.data?.[category]}
+											matches={legacyMatches}
 											onSelectMatch={setSelectedMatch}
 										/>
 									)}
@@ -543,8 +295,8 @@ export default function App() {
 					) : (
 						<MatchDetailView
 							match={selectedMatch}
-							currentPhase={currentPhase}
-							shared={shared}
+							currentPhase={phaseIndex}
+							shared={false}
 							effects={effects}
 							onBack={() => setSelectedMatch(null)}
 							onCheerLeft={() => triggerEffect("cheer", "left")}

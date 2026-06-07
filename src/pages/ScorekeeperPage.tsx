@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { LogOut, RefreshCw } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { supabase } from "../lib/supabase";
 import type { Category, MatchWithTeams, Phase } from "../lib/database.types";
+import { supabase } from "../lib/supabase";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -81,7 +81,8 @@ function ScoreCell({
 	onChange,
 	onCommit,
 }: ScoreCellProps) {
-	const displayValue = draft !== undefined ? draft : (value !== null ? String(value) : "");
+	const displayValue =
+		draft !== undefined ? draft : value !== null ? String(value) : "";
 
 	function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
 		if (e.key === "Enter" || e.key === "ArrowDown") {
@@ -169,12 +170,14 @@ export function ScorekeeperPage() {
 		setIsLoading(true);
 		const { data, error } = await supabase
 			.from("matches")
-			.select(`
+			.select(
+				`
 				*,
 				team_1:team_1_id ( id, team_name, category ),
 				team_2:team_2_id ( id, team_name, category ),
 				winner:winner_id ( id, team_name, category )
-			`)
+			`,
+			)
 			.eq("phase", phase)
 			.eq("category", category)
 			.order("match_order", { ascending: true });
@@ -213,7 +216,10 @@ export function ScorekeeperPage() {
 						setMatches((prev) =>
 							prev.map((m) =>
 								m.id === payload.new.id
-									? { ...m, ...(payload.new as MatchWithTeams) }
+									? {
+											...m,
+											...(payload.new as MatchWithTeams),
+										}
 									: m,
 							),
 						);
@@ -232,7 +238,10 @@ export function ScorekeeperPage() {
 	function handleChange(matchId: string, col: ScoreCol, raw: string) {
 		setDraft((prev) => ({
 			...prev,
-			[matchId]: { ...(prev[matchId] ?? {}), [col]: raw } as Record<ScoreCol, string>,
+			[matchId]: { ...(prev[matchId] ?? {}), [col]: raw } as Record<
+				ScoreCol,
+				string
+			>,
 		}));
 	}
 
@@ -242,7 +251,8 @@ export function ScorekeeperPage() {
 			const updated = { ...prev };
 			if (updated[matchId]) {
 				delete updated[matchId][col];
-				if (Object.keys(updated[matchId]).length === 0) delete updated[matchId];
+				if (Object.keys(updated[matchId]).length === 0)
+					delete updated[matchId];
 			}
 			return updated;
 		});
@@ -263,21 +273,33 @@ export function ScorekeeperPage() {
 		const r2 = col === "team_1_r2" ? parsed : match.team_1_r2;
 		const r3 = col === "team_1_r3" ? parsed : match.team_1_r3;
 		const r4 = col === "team_1_r4" ? parsed : match.team_1_r4;
-		const t1r = [r1, r2, r3, r4].map((r, i): number | null => (i < activeRoundsCount ? r : null));
-		update.team_1_final_points = calcFinalPoints(t1r[0], t1r[1], t1r[2], t1r[3]);
+		const t1r = [r1, r2, r3, r4].map((r, i): number | null =>
+			i < activeRoundsCount ? r : null,
+		);
+		update.team_1_final_points = calcFinalPoints(
+			t1r[0],
+			t1r[1],
+			t1r[2],
+			t1r[3],
+		);
 
 		const r1b = col === "team_2_r1" ? parsed : match.team_2_r1;
 		const r2b = col === "team_2_r2" ? parsed : match.team_2_r2;
 		const r3b = col === "team_2_r3" ? parsed : match.team_2_r3;
 		const r4b = col === "team_2_r4" ? parsed : match.team_2_r4;
-		const t2r = [r1b, r2b, r3b, r4b].map((r, i): number | null => (i < activeRoundsCount ? r : null));
-		update.team_2_final_points = calcFinalPoints(t2r[0], t2r[1], t2r[2], t2r[3]);
+		const t2r = [r1b, r2b, r3b, r4b].map((r, i): number | null =>
+			i < activeRoundsCount ? r : null,
+		);
+		update.team_2_final_points = calcFinalPoints(
+			t2r[0],
+			t2r[1],
+			t2r[2],
+			t2r[3],
+		);
 
 		// Optimistic local update
 		setMatches((prev) =>
-			prev.map((m) =>
-				m.id === matchId ? { ...m, ...update } : m,
-			),
+			prev.map((m) => (m.id === matchId ? { ...m, ...update } : m)),
 		);
 
 		// Persist to Supabase
@@ -329,13 +351,19 @@ export function ScorekeeperPage() {
 				);
 
 	// For inline total display as user types
-	function getLiveTotal(match: MatchWithTeams, team: 1 | 2, activeRoundsCount: number = 4): number | null {
+	function getLiveTotal(
+		match: MatchWithTeams,
+		team: 1 | 2,
+		activeRoundsCount: number = 4,
+	): number | null {
 		const prefix = team === 1 ? "team_1" : "team_2";
 		const matchDraft = draft[match.id] ?? {};
 		const get = (col: string) => {
 			const draftVal = matchDraft[col as ScoreCol];
 			if (draftVal !== undefined) return parseIntOrNull(draftVal);
-			return (match[col as keyof MatchWithTeams] as number | null) ?? null;
+			return (
+				(match[col as keyof MatchWithTeams] as number | null) ?? null
+			);
 		};
 		const rounds = [
 			get(`${prefix}_r1`),
@@ -353,8 +381,8 @@ export function ScorekeeperPage() {
 		const t2 = getLiveTotal(match, 2, elimActiveRounds) ?? 0;
 		if (t1 === t2) return null;
 		return t1 > t2
-			? match.team_1?.team_name ?? null
-			: match.team_2?.team_name ?? null;
+			? (match.team_1?.team_name ?? null)
+			: (match.team_2?.team_name ?? null);
 	}
 
 	// ── Render ────────────────────────────────────────────────────────────────
@@ -379,7 +407,11 @@ export function ScorekeeperPage() {
 					className="border border-white/30 bg-white/10 text-white text-xs font-semibold px-2 py-1.5 focus:outline-none focus:border-editorial-gold"
 				>
 					{PHASES.map((p) => (
-						<option key={p} value={p} className="text-editorial-ink bg-white">
+						<option
+							key={p}
+							value={p}
+							className="text-editorial-ink bg-white"
+						>
 							{p}
 						</option>
 					))}
@@ -391,8 +423,18 @@ export function ScorekeeperPage() {
 					onChange={(e) => setCategory(e.target.value as Category)}
 					className="border border-white/30 bg-white/10 text-white text-xs font-semibold px-2 py-1.5 focus:outline-none focus:border-editorial-gold"
 				>
-					<option value="Junior" className="text-editorial-ink bg-white">Junior</option>
-					<option value="Senior" className="text-editorial-ink bg-white">Senior</option>
+					<option
+						value="Junior"
+						className="text-editorial-ink bg-white"
+					>
+						Junior
+					</option>
+					<option
+						value="Senior"
+						className="text-editorial-ink bg-white"
+					>
+						Senior
+					</option>
 				</select>
 
 				{/* Table filter */}
@@ -405,7 +447,11 @@ export function ScorekeeperPage() {
 						All Tables
 					</option>
 					{availableTables.map((t) => (
-						<option key={t} value={String(t)} className="text-editorial-ink bg-white">
+						<option
+							key={t}
+							value={String(t)}
+							className="text-editorial-ink bg-white"
+						>
 							Table {t}
 						</option>
 					))}
@@ -417,7 +463,10 @@ export function ScorekeeperPage() {
 					title="Reload matches"
 					className="p-1.5 hover:text-editorial-gold transition-colors"
 				>
-					<RefreshCw size={15} className={isLoading ? "animate-spin" : ""} />
+					<RefreshCw
+						size={15}
+						className={isLoading ? "animate-spin" : ""}
+					/>
 				</button>
 
 				{/* Sign out */}
@@ -461,11 +510,17 @@ export function ScorekeeperPage() {
 						saving={saving}
 						saveError={saveError}
 						activeRounds={elimActiveRounds}
-						onAddRound={() => setElimActiveRounds((n) => Math.min(n + 1, 4))}
-						onRemoveRound={() => setElimActiveRounds((n) => Math.max(n - 1, 1))}
+						onAddRound={() =>
+							setElimActiveRounds((n) => Math.min(n + 1, 4))
+						}
+						onRemoveRound={() =>
+							setElimActiveRounds((n) => Math.max(n - 1, 1))
+						}
 						onChange={handleChange}
 						onCommit={handleCommit}
-						getLiveTotal={(m, t) => getLiveTotal(m, t, elimActiveRounds)}
+						getLiveTotal={(m, t) =>
+							getLiveTotal(m, t, elimActiveRounds)
+						}
 						getSuggestedWinner={getSuggestedWinner}
 					/>
 				)}
@@ -473,9 +528,19 @@ export function ScorekeeperPage() {
 
 			{/* ── Footer hint ──────────────────────────────────────────────── */}
 			<div className="px-4 py-3 text-[10px] text-gray-400 border-t border-gray-100 flex flex-wrap gap-x-6 gap-y-1">
-				<span><kbd className="font-mono bg-gray-100 px-1">Enter</kbd> / <kbd className="font-mono bg-gray-100 px-1">↓</kbd> next row</span>
-				<span><kbd className="font-mono bg-gray-100 px-1">Tab</kbd> / <kbd className="font-mono bg-gray-100 px-1">→</kbd> next cell</span>
-				<span><kbd className="font-mono bg-gray-100 px-1">↑ ↓ ← →</kbd> navigate</span>
+				<span>
+					<kbd className="font-mono bg-gray-100 px-1">Enter</kbd> /{" "}
+					<kbd className="font-mono bg-gray-100 px-1">↓</kbd> next row
+				</span>
+				<span>
+					<kbd className="font-mono bg-gray-100 px-1">Tab</kbd> /{" "}
+					<kbd className="font-mono bg-gray-100 px-1">→</kbd> next
+					cell
+				</span>
+				<span>
+					<kbd className="font-mono bg-gray-100 px-1">↑ ↓ ← →</kbd>{" "}
+					navigate
+				</span>
 				<span>Click out of a cell to save instantly</span>
 			</div>
 		</div>
@@ -504,8 +569,14 @@ function QualifiersGrid({
 	getLiveTotal,
 }: QualifiersGridProps) {
 	const COL_ORDER: QualifierCol[] = [
-		"team_1_r1", "team_1_r2", "team_1_r3", "team_1_r4",
-		"team_2_r1", "team_2_r2", "team_2_r3", "team_2_r4",
+		"team_1_r1",
+		"team_1_r2",
+		"team_1_r3",
+		"team_1_r4",
+		"team_2_r1",
+		"team_2_r2",
+		"team_2_r3",
+		"team_2_r4",
 	];
 
 	return (
@@ -513,29 +584,55 @@ function QualifiersGrid({
 			<thead>
 				<tr className="bg-editorial-ink text-white text-[10px] uppercase tracking-widest">
 					<th className="px-3 py-2 text-left font-black w-6">#</th>
-					<th className="px-2 py-2 text-center font-black w-10">Tbl</th>
+					<th className="px-2 py-2 text-center font-black w-10">
+						Tbl
+					</th>
 					{/* Team 1 block */}
-					<th className="px-3 py-2 text-left font-black min-w-[140px]">Team 1</th>
-					<th className="px-1 py-2 text-center font-black w-12">R1</th>
-					<th className="px-1 py-2 text-center font-black w-12">R2</th>
-					<th className="px-1 py-2 text-center font-black w-12">R3</th>
-					<th className="px-1 py-2 text-center font-black w-12">R4</th>
+					<th className="px-3 py-2 text-left font-black min-w-[140px]">
+						Team 1
+					</th>
+					<th className="px-1 py-2 text-center font-black w-12">
+						R1
+					</th>
+					<th className="px-1 py-2 text-center font-black w-12">
+						R2
+					</th>
+					<th className="px-1 py-2 text-center font-black w-12">
+						R3
+					</th>
+					<th className="px-1 py-2 text-center font-black w-12">
+						R4
+					</th>
 					<th className="px-2 py-2 text-center font-black w-14 text-editorial-gold">
 						Total
 					</th>
 					{/* Divider */}
-					<th className="px-2 py-2 text-center font-black w-8 text-white/40">vs</th>
+					<th className="px-2 py-2 text-center font-black w-8 text-white/40">
+						vs
+					</th>
 					{/* Team 2 block */}
-					<th className="px-3 py-2 text-left font-black min-w-[140px]">Team 2</th>
-					<th className="px-1 py-2 text-center font-black w-12">R1</th>
-					<th className="px-1 py-2 text-center font-black w-12">R2</th>
-					<th className="px-1 py-2 text-center font-black w-12">R3</th>
-					<th className="px-1 py-2 text-center font-black w-12">R4</th>
+					<th className="px-3 py-2 text-left font-black min-w-[140px]">
+						Team 2
+					</th>
+					<th className="px-1 py-2 text-center font-black w-12">
+						R1
+					</th>
+					<th className="px-1 py-2 text-center font-black w-12">
+						R2
+					</th>
+					<th className="px-1 py-2 text-center font-black w-12">
+						R3
+					</th>
+					<th className="px-1 py-2 text-center font-black w-12">
+						R4
+					</th>
 					<th className="px-2 py-2 text-center font-black w-14 text-editorial-gold">
 						Total
 					</th>
 					{/* Status */}
-					<th className="px-2 py-2 text-center font-black w-14">Status</th>
+					<th className="px-2 py-2 text-center font-black w-14">
+						Status
+					</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -549,7 +646,9 @@ function QualifiersGrid({
 						<tr
 							key={match.id}
 							className={`border-b border-gray-100 transition-colors ${
-								rowIndex % 2 === 0 ? "bg-white" : "bg-editorial-bg/50"
+								rowIndex % 2 === 0
+									? "bg-white"
+									: "bg-editorial-bg/50"
 							} ${hasError ? "bg-red-50" : ""}`}
 						>
 							{/* Row number */}
@@ -568,33 +667,40 @@ function QualifiersGrid({
 							<td className="px-3 py-1.5">
 								<span className="text-sm font-semibold truncate block max-w-[160px]">
 									{match.team_1?.team_name ?? (
-										<span className="text-gray-300 font-normal italic">Empty slot</span>
+										<span className="text-gray-300 font-normal italic">
+											Empty slot
+										</span>
 									)}
 								</span>
 							</td>
 
 							{/* Team 1 rounds */}
-							{(["team_1_r1", "team_1_r2", "team_1_r3", "team_1_r4"] as QualifierCol[]).map(
-								(col, colOffset) => (
-									<td
-										key={col}
-										className="px-0 py-0 border-l border-gray-100"
-									>
-										<ScoreCell
-											matchId={match.id}
-											col={col}
-											value={match[col] as number | null}
-											draft={draft[match.id]?.[col]}
-											rowIndex={rowIndex}
-											colIndex={colOffset}
-											totalCols={COL_ORDER.length}
-											totalRows={matches.length}
-											onChange={onChange}
-											onCommit={onCommit}
-										/>
-									</td>
-								),
-							)}
+							{(
+								[
+									"team_1_r1",
+									"team_1_r2",
+									"team_1_r3",
+									"team_1_r4",
+								] as QualifierCol[]
+							).map((col, colOffset) => (
+								<td
+									key={col}
+									className="px-0 py-0 border-l border-gray-100"
+								>
+									<ScoreCell
+										matchId={match.id}
+										col={col}
+										value={match[col] as number | null}
+										draft={draft[match.id]?.[col]}
+										rowIndex={rowIndex}
+										colIndex={colOffset}
+										totalCols={COL_ORDER.length}
+										totalRows={matches.length}
+										onChange={onChange}
+										onCommit={onCommit}
+									/>
+								</td>
+							))}
 
 							{/* Team 1 live total */}
 							<td className="px-2 py-1 text-center border-l border-gray-100">
@@ -618,33 +724,40 @@ function QualifiersGrid({
 							<td className="px-3 py-1.5">
 								<span className="text-sm font-semibold truncate block max-w-[160px]">
 									{match.team_2?.team_name ?? (
-										<span className="text-gray-300 font-normal italic">Empty slot</span>
+										<span className="text-gray-300 font-normal italic">
+											Empty slot
+										</span>
 									)}
 								</span>
 							</td>
 
 							{/* Team 2 rounds */}
-							{(["team_2_r1", "team_2_r2", "team_2_r3", "team_2_r4"] as QualifierCol[]).map(
-								(col, colOffset) => (
-									<td
-										key={col}
-										className="px-0 py-0 border-l border-gray-100"
-									>
-										<ScoreCell
-											matchId={match.id}
-											col={col}
-											value={match[col] as number | null}
-											draft={draft[match.id]?.[col]}
-											rowIndex={rowIndex}
-											colIndex={colOffset + 4}
-											totalCols={COL_ORDER.length}
-											totalRows={matches.length}
-											onChange={onChange}
-											onCommit={onCommit}
-										/>
-									</td>
-								),
-							)}
+							{(
+								[
+									"team_2_r1",
+									"team_2_r2",
+									"team_2_r3",
+									"team_2_r4",
+								] as QualifierCol[]
+							).map((col, colOffset) => (
+								<td
+									key={col}
+									className="px-0 py-0 border-l border-gray-100"
+								>
+									<ScoreCell
+										matchId={match.id}
+										col={col}
+										value={match[col] as number | null}
+										draft={draft[match.id]?.[col]}
+										rowIndex={rowIndex}
+										colIndex={colOffset + 4}
+										totalCols={COL_ORDER.length}
+										totalRows={matches.length}
+										onChange={onChange}
+										onCommit={onCommit}
+									/>
+								</td>
+							))}
 
 							{/* Team 2 live total */}
 							<td className="px-2 py-1 text-center border-l border-gray-100">
@@ -673,7 +786,9 @@ function QualifiersGrid({
 										error
 									</span>
 								) : (
-									<span className="text-[10px] text-gray-300">✓</span>
+									<span className="text-[10px] text-gray-300">
+										✓
+									</span>
 								)}
 							</td>
 						</tr>
@@ -713,28 +828,41 @@ function EliminationGrid({
 	getLiveTotal,
 	getSuggestedWinner,
 }: EliminationGridProps) {
-	const T1_COLS = (["team_1_r1","team_1_r2","team_1_r3","team_1_r4"] as QualifierCol[]).slice(0, activeRounds);
-	const T2_COLS = (["team_2_r1","team_2_r2","team_2_r3","team_2_r4"] as QualifierCol[]).slice(0, activeRounds);
+	const T1_COLS = (
+		["team_1_r1", "team_1_r2", "team_1_r3", "team_1_r4"] as QualifierCol[]
+	).slice(0, activeRounds);
+	const T2_COLS = (
+		["team_2_r1", "team_2_r2", "team_2_r3", "team_2_r4"] as QualifierCol[]
+	).slice(0, activeRounds);
 	const totalCols = activeRounds * 2;
-	const ROUND_LABELS = ["R1","R2","R3","R4"].slice(0, activeRounds);
+	const ROUND_LABELS = ["R1", "R2", "R3", "R4"].slice(0, activeRounds);
 
 	return (
 		<table className="w-full text-sm border-collapse">
 			<thead>
 				<tr className="bg-editorial-ink text-white text-[10px] uppercase tracking-widest">
 					<th className="px-3 py-2 text-left font-black w-6">#</th>
-					<th className="px-2 py-2 text-center font-black w-10">Tbl</th>
+					<th className="px-2 py-2 text-center font-black w-10">
+						Tbl
+					</th>
 					{/* Team 1 block */}
-					<th className="px-3 py-2 text-left font-black min-w-[140px]">Team 1</th>
+					<th className="px-3 py-2 text-left font-black min-w-[140px]">
+						Team 1
+					</th>
 					{ROUND_LABELS.map((label, i) => (
-						<th key={`t1-${label}`} className="px-1 py-2 text-center font-black w-12">
+						<th
+							key={`t1-${label}`}
+							className="px-1 py-2 text-center font-black w-12"
+						>
 							{label}
 							{i === activeRounds - 1 && activeRounds > 1 && (
 								<button
 									onClick={onRemoveRound}
 									className="ml-0.5 text-white/50 hover:text-red-400 transition-colors text-[9px]"
 									title={`Remove ${label}`}
-								>×</button>
+								>
+									×
+								</button>
 							)}
 						</th>
 					))}
@@ -744,20 +872,39 @@ function EliminationGrid({
 								onClick={onAddRound}
 								className="text-editorial-gold hover:text-white transition-colors text-[9px] font-bold uppercase tracking-widest"
 								title="Add round column"
-							>+R{activeRounds + 1}</button>
+							>
+								+R{activeRounds + 1}
+							</button>
 						</th>
 					)}
-					<th className="px-2 py-2 text-center font-black w-14 text-editorial-gold">Total</th>
-					<th className="px-2 py-2 text-center font-black w-8 text-white/40">vs</th>
+					<th className="px-2 py-2 text-center font-black w-14 text-editorial-gold">
+						Total
+					</th>
+					<th className="px-2 py-2 text-center font-black w-8 text-white/40">
+						vs
+					</th>
 					{/* Team 2 block */}
-					<th className="px-3 py-2 text-left font-black min-w-[140px]">Team 2</th>
+					<th className="px-3 py-2 text-left font-black min-w-[140px]">
+						Team 2
+					</th>
 					{ROUND_LABELS.map((label) => (
-						<th key={`t2-${label}`} className="px-1 py-2 text-center font-black w-12">{label}</th>
+						<th
+							key={`t2-${label}`}
+							className="px-1 py-2 text-center font-black w-12"
+						>
+							{label}
+						</th>
 					))}
 					{activeRounds < 4 && <th className="px-1 py-2 w-12" />}
-					<th className="px-2 py-2 text-center font-black w-14 text-editorial-gold">Total</th>
-					<th className="px-3 py-2 text-left font-black min-w-[140px]">Suggested Winner</th>
-					<th className="px-2 py-2 text-center font-black w-14">Status</th>
+					<th className="px-2 py-2 text-center font-black w-14 text-editorial-gold">
+						Total
+					</th>
+					<th className="px-3 py-2 text-left font-black min-w-[140px]">
+						Winner
+					</th>
+					<th className="px-2 py-2 text-center font-black w-14">
+						Status
+					</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -775,24 +922,37 @@ function EliminationGrid({
 						<tr
 							key={match.id}
 							className={`border-b border-gray-100 transition-colors ${
-								rowIndex % 2 === 0 ? "bg-white" : "bg-editorial-bg/50"
+								rowIndex % 2 === 0
+									? "bg-white"
+									: "bg-editorial-bg/50"
 							} ${hasError ? "bg-red-50" : ""}`}
 						>
-							<td className="px-3 py-0 text-gray-400 font-mono text-xs">{rowIndex + 1}</td>
+							<td className="px-3 py-0 text-gray-400 font-mono text-xs">
+								{rowIndex + 1}
+							</td>
 							<td className="px-2 py-0 text-center">
-								<span className="text-xs font-bold text-gray-500">{match.table_number ?? "—"}</span>
+								<span className="text-xs font-bold text-gray-500">
+									{match.table_number ?? "—"}
+								</span>
 							</td>
 							{/* Team 1 name */}
 							<td className="px-3 py-1.5">
-								<span className={`text-sm font-semibold truncate block max-w-[160px] ${t1IsAhead ? "text-editorial-green" : ""}`}>
+								<span
+									className={`text-sm font-semibold truncate block max-w-[160px] ${t1IsAhead ? "text-editorial-green" : ""}`}
+								>
 									{match.team_1?.team_name ?? (
-										<span className="text-gray-300 font-normal italic">Empty slot</span>
+										<span className="text-gray-300 font-normal italic">
+											Empty slot
+										</span>
 									)}
 								</span>
 							</td>
 							{/* Team 1 round cells */}
 							{T1_COLS.map((col, colOffset) => (
-								<td key={col} className="px-0 py-0 border-l border-gray-100">
+								<td
+									key={col}
+									className="px-0 py-0 border-l border-gray-100"
+								>
 									<ScoreCell
 										matchId={match.id}
 										col={col}
@@ -810,23 +970,34 @@ function EliminationGrid({
 							{activeRounds < 4 && <td />}
 							{/* Team 1 total */}
 							<td className="px-2 py-1 text-center border-l border-gray-100">
-								<span className={`text-sm font-black font-mono ${t1Total !== null ? "text-editorial-green" : "text-gray-300"}`}>
+								<span
+									className={`text-sm font-black font-mono ${t1Total !== null ? "text-editorial-green" : "text-gray-300"}`}
+								>
 									{t1Total !== null ? t1Total : "—"}
 								</span>
 							</td>
 							{/* vs */}
-							<td className="px-2 py-1 text-center text-gray-300 font-bold text-xs">vs</td>
+							<td className="px-2 py-1 text-center text-gray-300 font-bold text-xs">
+								vs
+							</td>
 							{/* Team 2 name */}
 							<td className="px-3 py-1.5">
-								<span className={`text-sm font-semibold truncate block max-w-[160px] ${t2IsAhead ? "text-editorial-green" : ""}`}>
+								<span
+									className={`text-sm font-semibold truncate block max-w-[160px] ${t2IsAhead ? "text-editorial-green" : ""}`}
+								>
 									{match.team_2?.team_name ?? (
-										<span className="text-gray-300 font-normal italic">Empty slot</span>
+										<span className="text-gray-300 font-normal italic">
+											Empty slot
+										</span>
 									)}
 								</span>
 							</td>
 							{/* Team 2 round cells */}
 							{T2_COLS.map((col, colOffset) => (
-								<td key={col} className="px-0 py-0 border-l border-gray-100">
+								<td
+									key={col}
+									className="px-0 py-0 border-l border-gray-100"
+								>
 									<ScoreCell
 										matchId={match.id}
 										col={col}
@@ -844,28 +1015,45 @@ function EliminationGrid({
 							{activeRounds < 4 && <td />}
 							{/* Team 2 total */}
 							<td className="px-2 py-1 text-center border-l border-gray-100">
-								<span className={`text-sm font-black font-mono ${t2Total !== null ? "text-editorial-green" : "text-gray-300"}`}>
+								<span
+									className={`text-sm font-black font-mono ${t2Total !== null ? "text-editorial-green" : "text-gray-300"}`}
+								>
 									{t2Total !== null ? t2Total : "—"}
 								</span>
 							</td>
 							{/* Suggested winner */}
 							<td className="px-3 py-1">
 								{confirmedWinner ? (
-									<span className="text-xs font-black text-editorial-green uppercase tracking-wide">✓ {confirmedWinner}</span>
+									<span className="text-xs font-black text-editorial-green uppercase tracking-wide">
+										✓ {confirmedWinner}
+									</span>
 								) : suggestedWinner ? (
-									<span className="text-xs font-semibold text-editorial-gold">→ {suggestedWinner}</span>
+									<span className="text-xs font-semibold text-editorial-gold">
+										→ {suggestedWinner}
+									</span>
 								) : (
-									<span className="text-xs text-gray-300">—</span>
+									<span className="text-xs text-gray-300">
+										—
+									</span>
 								)}
 							</td>
 							{/* Status */}
 							<td className="px-2 py-1 text-center">
 								{isSaving ? (
-									<span className="text-[10px] font-semibold text-editorial-gold animate-pulse">saving…</span>
+									<span className="text-[10px] font-semibold text-editorial-gold animate-pulse">
+										saving…
+									</span>
 								) : hasError ? (
-									<span title={hasError} className="text-[10px] font-semibold text-red-500 cursor-help">error</span>
+									<span
+										title={hasError}
+										className="text-[10px] font-semibold text-red-500 cursor-help"
+									>
+										error
+									</span>
 								) : (
-									<span className="text-[10px] text-gray-300">✓</span>
+									<span className="text-[10px] text-gray-300">
+										✓
+									</span>
 								)}
 							</td>
 						</tr>

@@ -2,23 +2,27 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
 	AlertCircle,
+	ChevronDown,
 	ChevronRight,
+	ChevronUp,
+	Lock,
 	LogOut,
 	Plus,
 	RefreshCw,
 	Trash2,
 	Trophy,
+	Unlock,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
 import type { Category, MatchWithTeams, Phase, Team } from "../lib/database.types";
 
-// ─── Constants & pure helpers ─────────────────────────────────────────────────
+// ─── Types & pure helpers ──────────────────────────────────────────────────────
 
 interface Standing {
 	team: Team;
-	best_round: number;   // primary sort: highest single-round score
-	total_points: number; // tie-breaker: sum of all rounds played
+	best_round: number;
+	total_points: number;
 	rank: number;
 }
 
@@ -51,14 +55,6 @@ function nextPhaseFor(phase: Phase): Phase | null {
 /**
  * Bracket-correct seeding: top qualifier seed faces the lowest seed first
  * so the best two teams cannot meet before the Final.
- *
- * Match ORDER is chosen so pairing adjacent winners (0+1, 2+3 …) in the
- * next round preserves those paths:
- *   n=16 → 1v16, 8v9, 4v13, 5v12, 2v15, 7v10, 3v14, 6v11
- *   n=8  → 1v8,  4v5, 2v7,  3v6
- *   n=4  → 1v4,  2v3
- *
- * Only powers of 2 are supported to ensure every team has an opponent.
  */
 function seedPairings(n: AdvanceCount): [number, number][] {
 	if (n === 16) return [[1,16],[8,9],[4,13],[5,12],[2,15],[7,10],[3,14],[6,11]];
@@ -73,7 +69,6 @@ function computeStandings(matches: MatchWithTeams[]): Standing[] {
 		if (!id || !team) return;
 		const scored = rounds.filter((v): v is number => v !== null && v > 0);
 		if (scored.length === 0) {
-			// Ensure team appears in standings even with no scores yet
 			if (!map.has(id)) map.set(id, { team, best_round: 0, total: 0 });
 			return;
 		}
@@ -89,18 +84,11 @@ function computeStandings(matches: MatchWithTeams[]): Standing[] {
 	}
 
 	return Array.from(map.values())
-		.sort((a, b) =>
-			b.best_round !== a.best_round ? b.best_round - a.best_round : b.total - a.total,
-		)
-		.map((e, i) => ({
-			team: e.team,
-			best_round: e.best_round,
-			total_points: e.total,
-			rank: i + 1,
-		}));
+		.sort((a, b) => b.best_round !== a.best_round ? b.best_round - a.best_round : b.total - a.total)
+		.map((e, i) => ({ team: e.team, best_round: e.best_round, total_points: e.total, rank: i + 1 }));
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// ─── Page ──────────────────────────────────────────────────────────────────────
 
 export function AdminPage() {
 	const { signOut } = useAuth();
@@ -132,7 +120,13 @@ export function AdminPage() {
 	const [winnerConfirming, setWinnerConfirming] = useState<string | null>(null);
 	const [overrideMatchId, setOverrideMatchId] = useState<string | null>(null);
 
-	// ── Data loading ──────────────────────────────────────────────────────────
+	// UI state
+	const [standingsOpen, setStandingsOpen] = useState(true);
+
+	// Phase locks (keyed by phase string, value = lock_type)
+	const [phaseLocks, setPhaseLocks] = useState<Record<string, string>>({});
+
+	// ── Data loading ────────────────────────────────────────────────────────────
 
 	async function loadData() {
 		setIsLoading(true);
@@ -161,20 +155,48 @@ export function AdminPage() {
 		setIsLoading(false);
 	}
 
-	useEffect(() => { loadData(); }, [category]);
+	async function loadPhaseLocks() {
+		const { data } = await supabase.from("phase_locks").select("*").eq("category", category);
+		if (data) {
+			const locks: Record<string, string> = {};
+			(data as any[]).forEach((l) => { locks[l.phase] = l.lock_type; });
+			setPhaseLocks(locks);
+		}
+	}
 
-	// Realtime: update standings as scorekeepers enter scores
+	useEffect(() => {
+		loadData();
+		loadPhaseLocks();
+	}, [category]);
+
+	// Realtime: reload standings as scorekeepers enter scores
 	useEffect(() => {
 		const channel = supabase
 			.channel(`admin-realtime-${category}`)
-			.on("postgres_changes", { event: "*", schema: "public", table: "matches" }, () => {
-				loadData();
-			})
+			.on("postgres_changes", { event: "*", schema: "public", table: "matches" }, () => { loadData(); })
 			.subscribe();
 		return () => { supabase.removeChannel(channel); };
 	}, [category]);
 
-	// ── Qualifier match creation ──────────────────────────────────────────────
+	// ── Phase lock management ───────────────────────────────────────────────────
+
+	async function handleLockPhase(phase: string, lockType: "full" | "scores") {
+		const { error } = await supabase
+			.from("phase_locks")
+			.upsert({ phase, category, lock_type: lockType }, { onConflict: "phase,category" });
+		if (!error) loadPhaseLocks();
+	}
+
+	async function handleUnlockPhase(phase: string) {
+		const { error } = await supabase
+			.from("phase_locks")
+			.delete()
+			.eq("phase", phase)
+			.eq("category", category);
+		if (!error) loadPhaseLocks();
+	}
+
+	// ── Qualifier match creation ────────────────────────────────────────────────
 
 	async function handleCreateMatch() {
 		setCreateError(null);
@@ -227,7 +249,7 @@ export function AdminPage() {
 		if (!error) loadData();
 	}
 
-	// ── Bracket advancement ───────────────────────────────────────────────────
+	// ── Bracket advancement ─────────────────────────────────────────────────────
 
 	const standings = computeStandings(qualifierMatches);
 	const targetPhase = targetPhaseFor(advanceCount);
@@ -300,7 +322,6 @@ export function AdminPage() {
 			});
 		}
 
-		// Semifinals also produces a Third Place match from the two losers
 		if (fromPhase === "Semifinals") {
 			const getLoserId = (m: MatchWithTeams) =>
 				m.winner_id === m.team_1_id ? m.team_2_id : m.team_1_id;
@@ -333,7 +354,7 @@ export function AdminPage() {
 		}
 	}
 
-	// ── Render ────────────────────────────────────────────────────────────────
+	// ── Render ──────────────────────────────────────────────────────────────────
 
 	return (
 		<div className="min-h-screen bg-editorial-bg text-editorial-ink font-sans">
@@ -341,11 +362,8 @@ export function AdminPage() {
 			{/* Top bar */}
 			<div className="sticky top-0 z-20 bg-editorial-ink text-white border-b-4 border-editorial-gold px-4 py-3 flex items-center gap-3 flex-wrap">
 				<Trophy size={15} className="text-editorial-gold shrink-0" />
-				<span className="text-xs font-black uppercase tracking-widest mr-auto">
-					Admin Dashboard
-				</span>
+				<span className="text-xs font-black uppercase tracking-widest mr-auto">Admin Dashboard</span>
 
-				{/* Category toggle */}
 				<div className="flex border border-white/20">
 					{(["Junior", "Senior"] as Category[]).map((c) => (
 						<button key={c} onClick={() => setCategory(c)}
@@ -378,13 +396,21 @@ export function AdminPage() {
 					<div className="py-20 text-center text-sm text-gray-400">Loading…</div>
 				) : (
 					<>
-						{/* ① QUALIFIER MATCH SETUP ─────────────────────────── */}
+						{/* ① QUALIFIER MATCH SETUP ───────────────────────────── */}
 						<section>
-							<SectionHeader
-								number="01"
-								title="Qualifier Match Setup"
-								subtitle={`${qualifierMatches.length} match(es) created · ${allTeams.length} teams in ${category} division`}
-							/>
+							<div className="flex items-start justify-between gap-4 flex-wrap mb-4">
+								<SectionHeader
+									number="01"
+									title="Qualifier Match Setup"
+									subtitle={`${qualifierMatches.length} match(es) created · ${allTeams.length} teams in ${category} division`}
+								/>
+								<LockControl
+									phase="Qualifiers"
+									lockType={phaseLocks["Qualifiers"] ?? null}
+									onLock={(lt) => handleLockPhase("Qualifiers", lt)}
+									onUnlock={() => handleUnlockPhase("Qualifiers")}
+								/>
+							</div>
 
 							{/* Create form */}
 							<div className="border-2 border-editorial-ink bg-white p-5 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] space-y-4">
@@ -451,7 +477,6 @@ export function AdminPage() {
 									</p>
 								)}
 
-								{/* Auto-generate shortcut */}
 								<div className="pt-2 border-t border-gray-100 flex items-center justify-between gap-3 flex-wrap">
 									<p className="text-xs text-gray-400">
 										Quickly pair all {allTeams.length} teams into {Math.floor(allTeams.length / 2)} matches
@@ -466,7 +491,7 @@ export function AdminPage() {
 								</div>
 							</div>
 
-							{/* Existing qualifier matches list */}
+							{/* Existing qualifier matches */}
 							{qualifierMatches.length > 0 && (
 								<div className="mt-3 border-2 border-editorial-ink overflow-hidden">
 									<div className="bg-editorial-ink text-white px-3 py-2 flex items-center">
@@ -506,25 +531,10 @@ export function AdminPage() {
 							)}
 						</section>
 
-						{/* ② QUALIFIER STANDINGS ──────────────────────────── */}
+						{/* ② ADVANCE TO BRACKET ───────────────────────────────── */}
 						<section>
 							<SectionHeader
 								number="02"
-								title="Qualifier Standings"
-								subtitle={`${standings.length} teams ranked · updates live as scores are entered`}
-							/>
-
-							{standings.length === 0 ? (
-								<EmptyState text="No qualifier scores yet. Scorekeepers can enter scores at /scorekeeper once matches are created above." />
-							) : (
-								<StandingsTable standings={standings} advanceCount={advanceCount} />
-							)}
-						</section>
-
-						{/* ③ ADVANCE TO BRACKET ───────────────────────────── */}
-						<section>
-							<SectionHeader
-								number="03"
 								title="Advance to Bracket"
 								subtitle="Seeding is rank-based: top qualifier seed faces the lowest seed first to protect high performers"
 							/>
@@ -540,7 +550,6 @@ export function AdminPage() {
 								</div>
 							) : (
 								<div className="border-2 border-editorial-ink bg-white p-5 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] space-y-5">
-									{/* Advance count — powers of 2 only */}
 									<div className="flex items-center gap-4 flex-wrap">
 										<span className="text-xs font-black uppercase tracking-widest">Advance top</span>
 										<div className="flex border-2 border-editorial-ink">
@@ -548,9 +557,7 @@ export function AdminPage() {
 												<button key={n}
 													onClick={() => { setAdvanceCount(n); setShowSeedPreview(false); }}
 													className={`px-5 py-2 text-sm font-black transition-colors ${
-														advanceCount === n
-															? "bg-editorial-ink text-white"
-															: "bg-white text-editorial-ink hover:bg-editorial-gold/20"
+														advanceCount === n ? "bg-editorial-ink text-white" : "bg-white text-editorial-ink hover:bg-editorial-gold/20"
 													}`}
 												>
 													{n}
@@ -558,23 +565,20 @@ export function AdminPage() {
 											))}
 										</div>
 										<span className="text-xs font-black uppercase tracking-widest">
-											teams →{" "}
-											<span className="text-editorial-gold">{targetPhase}</span>
+											teams → <span className="text-editorial-gold">{targetPhase}</span>
 										</span>
 									</div>
 
-									{/* Seeding note */}
 									<div className="bg-editorial-ink/5 border-l-4 border-editorial-gold px-4 py-2 text-xs text-gray-600">
 										<strong className="font-black text-editorial-ink">Seeding:</strong>{" "}
 										Strictly rank-based — top qualifier seed faces the lowest seed first.{" "}
 										{advanceCount === 16
-											? "Match order (1v16, 8v9, 4v13, 5v12, 2v15, 7v10, 3v14, 6v11) guarantees seeds 1 & 2 cannot meet before the Final."
+											? "Order (1v16, 8v9, 4v13, 5v12, 2v15, 7v10, 3v14, 6v11) guarantees seeds 1 & 2 cannot meet before the Final."
 											: advanceCount === 8
 											? "Order (1v8, 4v5, 2v7, 3v6) guarantees seeds 1 & 2 cannot meet before the Final."
 											: "1v4, 2v3 — seeds 1 & 2 meet only in the Final."}
 									</div>
 
-									{/* Preview toggle */}
 									<button onClick={() => setShowSeedPreview((v) => !v)}
 										className="flex items-center gap-2 text-xs font-semibold text-gray-500 hover:text-editorial-ink transition-colors"
 									>
@@ -614,7 +618,34 @@ export function AdminPage() {
 							)}
 						</section>
 
-						{/* ④ BRACKET PHASES ───────────────────────────────── */}
+						{/* ③ QUALIFIER STANDINGS (collapsible) ───────────────── */}
+						<section>
+							<div className="flex items-start justify-between gap-4 flex-wrap mb-4">
+								<SectionHeader
+									number="03"
+									title="Qualifier Standings"
+									subtitle={`${standings.length} teams ranked · updates live as scores are entered`}
+								/>
+								<button
+									onClick={() => setStandingsOpen((v) => !v)}
+									className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-editorial-ink transition-colors border border-gray-200 px-3 py-1.5"
+									title={standingsOpen ? "Collapse standings" : "Expand standings"}
+								>
+									{standingsOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+									{standingsOpen ? "Collapse" : "Expand"}
+								</button>
+							</div>
+
+							{standingsOpen && (
+								standings.length === 0 ? (
+									<EmptyState text="No qualifier scores yet. Scorekeepers can enter scores at /scorekeeper once matches are created above." />
+								) : (
+									<StandingsTable standings={standings} advanceCount={advanceCount} />
+								)
+							)}
+						</section>
+
+						{/* ④ BRACKET PHASES ───────────────────────────────────── */}
 						{ELIM_PHASES
 							.filter((p) => p !== "Third Place" && (elimByPhase[p]?.length ?? 0) > 0)
 							.map((phase) => (
@@ -625,14 +656,17 @@ export function AdminPage() {
 									thirdPlaceMatches={phase === "Semifinals" ? (elimByPhase["Third Place"] ?? []) : []}
 									overrideMatchId={overrideMatchId}
 									winnerConfirming={winnerConfirming}
+									lockType={phaseLocks[phase] ?? null}
 									onSetWinner={handleSetWinner}
 									onToggleOverride={setOverrideMatchId}
 									onAdvanceWinners={nextPhaseFor(phase) ? () => handleAdvanceWinners(phase) : undefined}
 									canAdvance={(elimByPhase[nextPhaseFor(phase)!]?.length ?? 0) === 0}
+									onLock={(lt) => handleLockPhase(phase, lt)}
+									onUnlock={() => handleUnlockPhase(phase)}
 								/>
 							))}
 
-						{/* Third Place standalone (only once Finals also exists) */}
+						{/* Third Place standalone */}
 						{(elimByPhase["Third Place"]?.length ?? 0) > 0 &&
 							(elimByPhase["Finals"]?.length ?? 0) > 0 && (
 							<BracketSection
@@ -642,10 +676,13 @@ export function AdminPage() {
 								thirdPlaceMatches={[]}
 								overrideMatchId={overrideMatchId}
 								winnerConfirming={winnerConfirming}
+								lockType={phaseLocks["Third Place"] ?? null}
 								onSetWinner={handleSetWinner}
 								onToggleOverride={setOverrideMatchId}
 								onAdvanceWinners={undefined}
 								canAdvance={false}
+								onLock={(lt) => handleLockPhase("Third Place", lt)}
+								onUnlock={() => handleUnlockPhase("Third Place")}
 							/>
 						)}
 					</>
@@ -659,7 +696,7 @@ export function AdminPage() {
 
 function SectionHeader({ number, title, subtitle }: { number: string; title: string; subtitle: string }) {
 	return (
-		<div className="mb-4">
+		<div className="mb-0">
 			<div className="flex items-baseline gap-3 mb-1">
 				<span className="text-[10px] font-black text-editorial-gold tracking-widest">{number}</span>
 				<h2 className="text-xl font-black uppercase tracking-widest">{title}</h2>
@@ -678,10 +715,80 @@ function EmptyState({ text }: { text: string }) {
 	);
 }
 
+function LockControl({ phase, lockType, onLock, onUnlock }: {
+	phase: string;
+	lockType: string | null;
+	onLock: (lt: "full" | "scores") => void;
+	onUnlock: () => void;
+}) {
+	const [open, setOpen] = useState(false);
+
+	if (lockType) {
+		return (
+			<div className="flex items-center gap-2 shrink-0">
+				<span className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1 px-2 py-1 border ${
+					lockType === "full"
+						? "bg-red-50 text-red-600 border-red-200"
+						: "bg-amber-50 text-amber-700 border-amber-200"
+				}`}>
+					<Lock size={9} />
+					{lockType === "full" ? "Locked" : "Scores Hidden"}
+				</span>
+				<button
+					onClick={onUnlock}
+					className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-editorial-ink transition-colors"
+					title="Unlock spectator view"
+				>
+					<Unlock size={10} /> Unlock
+				</button>
+			</div>
+		);
+	}
+
+	return (
+		<div className="relative shrink-0">
+			<button
+				onClick={() => setOpen((v) => !v)}
+				className="flex items-center gap-1 text-[10px] font-semibold text-gray-400 border border-gray-200 px-2 py-1.5 hover:border-editorial-ink hover:text-editorial-ink transition-colors"
+				title={`Lock spectator view for ${phase}`}
+			>
+				<Lock size={10} /> Lock phase
+			</button>
+
+			{open && (
+				<div className="absolute right-0 top-full mt-1 z-20 border-2 border-editorial-ink bg-white shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] p-3 space-y-2 w-52">
+					<p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1">
+						Spectator lock — {phase}
+					</p>
+					<button
+						onClick={() => { onLock("scores"); setOpen(false); }}
+						className="w-full text-left px-3 py-2 text-xs border border-gray-200 hover:border-editorial-gold hover:bg-editorial-gold/10 transition-colors"
+					>
+						<span className="font-bold block">Hide Scores</span>
+						<span className="text-[10px] text-gray-400">Show teams, hide point values</span>
+					</button>
+					<button
+						onClick={() => { onLock("full"); setOpen(false); }}
+						className="w-full text-left px-3 py-2 text-xs border border-gray-200 hover:border-red-300 hover:bg-red-50 transition-colors"
+					>
+						<span className="font-bold block">Lock All</span>
+						<span className="text-[10px] text-gray-400">Hide everything from spectators</span>
+					</button>
+					<button
+						onClick={() => setOpen(false)}
+						className="text-[10px] text-gray-400 underline w-full text-right pt-1 hover:text-editorial-ink"
+					>
+						Cancel
+					</button>
+				</div>
+			)}
+		</div>
+	);
+}
+
 function StandingsTable({ standings, advanceCount }: { standings: Standing[]; advanceCount: AdvanceCount }) {
 	return (
 		<div className="border-2 border-editorial-ink overflow-hidden">
-			{/* Column header */}
 			<div className="bg-editorial-ink text-white grid grid-cols-[28px_1fr_80px_88px_48px] px-3 py-2 text-[10px] font-black uppercase tracking-widest">
 				<span>#</span>
 				<span>Team</span>
@@ -698,11 +805,9 @@ function StandingsTable({ standings, advanceCount }: { standings: Standing[]; ad
 				>
 					<span className="text-xs font-black text-gray-400">{s.rank}</span>
 					<span className="text-sm font-semibold truncate">{s.team.team_name}</span>
-					{/* Primary ranking key: best single round */}
 					<span className={`text-right text-sm font-black font-mono ${s.best_round > 0 ? "text-editorial-green" : "text-gray-300"}`}>
 						{s.best_round > 0 ? s.best_round : "—"}
 					</span>
-					{/* Tie-breaker: total across all rounds */}
 					<span className="text-right text-xs font-mono text-gray-400">
 						{s.total_points > 0 ? s.total_points : "—"}
 					</span>
@@ -747,16 +852,19 @@ function SeedPreview({ pairings, topTeams, targetPhase }: {
 	);
 }
 
-function BracketSection({ phase, matches, thirdPlaceMatches, overrideMatchId, winnerConfirming, onSetWinner, onToggleOverride, onAdvanceWinners, canAdvance }: {
+function BracketSection({ phase, matches, thirdPlaceMatches, overrideMatchId, winnerConfirming, lockType, onSetWinner, onToggleOverride, onAdvanceWinners, canAdvance, onLock, onUnlock }: {
 	phase: Phase;
 	matches: MatchWithTeams[];
 	thirdPlaceMatches: MatchWithTeams[];
 	overrideMatchId: string | null;
 	winnerConfirming: string | null;
+	lockType: string | null;
 	onSetWinner: (matchId: string, winnerId: string) => void;
 	onToggleOverride: (id: string | null) => void;
 	onAdvanceWinners?: () => void;
 	canAdvance: boolean;
+	onLock: (lt: "full" | "scores") => void;
+	onUnlock: () => void;
 }) {
 	const allConfirmed = matches.every((m) => m.winner_id);
 	const confirmedCount = matches.filter((m) => m.winner_id).length;
@@ -770,16 +878,19 @@ function BracketSection({ phase, matches, thirdPlaceMatches, overrideMatchId, wi
 					title={phase}
 					subtitle={`${matches.length} match(es) · ${allConfirmed ? "All winners confirmed ✓" : `${confirmedCount}/${matches.length} confirmed`}`}
 				/>
-				{onAdvanceWinners && canAdvance && (
-					<button
-						onClick={onAdvanceWinners}
-						disabled={!allConfirmed}
-						title={!allConfirmed ? "Confirm all winners first" : undefined}
-						className="border-2 border-editorial-ink px-4 py-2 text-xs font-black uppercase tracking-widest bg-white hover:bg-editorial-gold transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] whitespace-nowrap"
-					>
-						Advance Winners → {nextPhaseFor(phase)}
-					</button>
-				)}
+				<div className="flex items-center gap-3 flex-wrap">
+					<LockControl phase={phase} lockType={lockType} onLock={onLock} onUnlock={onUnlock} />
+					{onAdvanceWinners && canAdvance && (
+						<button
+							onClick={onAdvanceWinners}
+							disabled={!allConfirmed}
+							title={!allConfirmed ? "Confirm all winners first" : undefined}
+							className="border-2 border-editorial-ink px-4 py-2 text-xs font-black uppercase tracking-widest bg-white hover:bg-editorial-gold transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] whitespace-nowrap"
+						>
+							Advance Winners → {nextPhaseFor(phase)}
+						</button>
+					)}
+				</div>
 			</div>
 
 			<div className="space-y-2">
@@ -829,7 +940,6 @@ function MatchCard({ match, matchNumber, isOverriding, isConfirming, onSetWinner
 
 	return (
 		<div className={`border-2 p-4 transition-colors ${hasWinner ? "border-editorial-green bg-editorial-green/5" : "border-editorial-ink bg-white"}`}>
-			{/* Score row */}
 			<div className="flex items-center gap-3 flex-wrap">
 				<span className="text-[10px] font-black text-gray-400 w-14 shrink-0 uppercase tracking-wide">
 					Match {matchNumber}
@@ -864,7 +974,6 @@ function MatchCard({ match, matchNumber, isOverriding, isConfirming, onSetWinner
 				</div>
 			</div>
 
-			{/* Winner picker */}
 			{showPicker && (
 				<div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-3 flex-wrap">
 					<span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
@@ -885,16 +994,13 @@ function MatchCard({ match, matchNumber, isOverriding, isConfirming, onSetWinner
 										: "border-gray-300 text-gray-600 hover:border-editorial-ink hover:text-editorial-ink"
 								}`}
 							>
-								{suggested ? "★ " : ""}{team.team_name}{" "}
-								<span className="font-mono">({score})</span>
+								{suggested ? "★ " : ""}{team.team_name} <span className="font-mono">({score})</span>
 							</button>
 						);
 					})}
 
 					{isTied && (
-						<span className="text-[10px] text-editorial-gold font-semibold">
-							Tied — admin must decide
-						</span>
+						<span className="text-[10px] text-editorial-gold font-semibold">Tied — admin must decide</span>
 					)}
 					{isOverriding && (
 						<button onClick={() => onToggleOverride(null)} className="text-[10px] text-gray-400 underline hover:text-editorial-ink">

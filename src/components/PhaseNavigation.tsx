@@ -27,7 +27,7 @@ export function PhaseNavigation({
 						Phase Index
 					</h1>
 					<p className="text-2xl sm:text-3xl md:text-5xl font-serif font-black italic tracking-tighter leading-none truncate">
-						{phaseName}
+						{phaseName.toUpperCase()}
 					</p>
 				</div>
 				<button

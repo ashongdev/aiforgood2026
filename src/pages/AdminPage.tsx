@@ -3,18 +3,25 @@ import {
 	ChevronDown,
 	ChevronRight,
 	ChevronUp,
+	Clock,
+	Copy,
+	Eye,
+	EyeOff,
+	Loader2,
 	Lock,
 	LogOut,
 	Pencil,
 	Plus,
 	RefreshCw,
+	Search,
+	ShieldCheck,
 	Trash2,
 	Trophy,
 	Unlock,
 	Upload,
 	Users,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useEdgeColumnResize } from "../hooks/useEdgeColumnResize";
@@ -22,6 +29,8 @@ import type {
 	Category,
 	MatchWithTeams,
 	Phase,
+	ScoreAuditLog,
+	ScorekeeperProfile,
 	Team,
 } from "../lib/database.types";
 import { supabase } from "../lib/supabase";
@@ -269,17 +278,19 @@ export function AdminPage() {
 		return c === "Senior" ? "Senior" : "Junior";
 	});
 	const [activeTab, setActiveTab] = useState<
-		"qualifiers" | "bracket" | "teams"
+		"qualifiers" | "bracket" | "teams" | "scorekeepers"
 	>(() => {
 		const t = searchParams.get("tab");
-		return (["qualifiers", "bracket", "teams"] as const).includes(
-			t as never,
-		)
-			? (t as "qualifiers" | "bracket" | "teams")
+		return (
+			["qualifiers", "bracket", "teams", "scorekeepers"] as const
+		).includes(t as never)
+			? (t as "qualifiers" | "bracket" | "teams" | "scorekeepers")
 			: "qualifiers";
 	});
 
-	function changeTab(tab: "qualifiers" | "bracket" | "teams") {
+	function changeTab(
+		tab: "qualifiers" | "bracket" | "teams" | "scorekeepers",
+	) {
 		setActiveTab(tab);
 		setSearchParams(
 			(prev) => {
@@ -748,6 +759,16 @@ export function AdminPage() {
 						}`}
 					>
 						<Users size={12} /> Teams
+					</button>
+					<button
+						onClick={() => changeTab("scorekeepers")}
+						className={`flex items-center gap-1.5 px-5 py-2.5 text-xs font-black uppercase tracking-widest transition-colors border-l border-white/10 ${
+							activeTab === "scorekeepers"
+								? "bg-editorial-gold text-editorial-ink"
+								: "text-white/60 hover:text-white hover:bg-white/5"
+						}`}
+					>
+						<ShieldCheck size={12} /> Scorekeepers
 					</button>
 				</div>
 			</div>
@@ -1329,6 +1350,9 @@ export function AdminPage() {
 							onTeamsChanged={loadData}
 						/>
 					)}
+
+					{/* ─ SCOREKEEPERS TAB ───────────────────────────────────── */}
+					{activeTab === "scorekeepers" && <ScoreekeepersTab />}
 				</div>
 			)}
 		</div>
@@ -1354,6 +1378,7 @@ function TeamsTab({
 	});
 
 	const [teams, setTeams] = useState<Team[]>([]);
+	const [teamSearch, setTeamSearch] = useState("");
 	const [isLoading, setIsLoading] = useState(true);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [editDraft, setEditDraft] = useState<Partial<Team>>({});
@@ -1541,20 +1566,57 @@ function TeamsTab({
 
 	const readyCount = bulkRows.filter((r) => r.team_name.trim()).length;
 
+	const filteredTeams = teamSearch.trim()
+		? teams.filter(
+				(t) =>
+					t.team_name
+						.toLowerCase()
+						.includes(teamSearch.toLowerCase()) ||
+					t.country
+						?.toLowerCase()
+						.includes(teamSearch.toLowerCase()) ||
+					t.coach_name
+						?.toLowerCase()
+						.includes(teamSearch.toLowerCase()),
+			)
+		: teams;
+
 	return (
 		<>
-			{/* Stats strip */}
+			{/* Stats strip + search */}
 			<div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest text-gray-400 px-1 pb-1 flex-wrap">
 				<Users size={11} />
 				<span>
 					{teams.length} {category} team
 					{teams.length !== 1 ? "s" : ""} registered
 				</span>
+				<div className="ml-auto flex items-center gap-2 border border-gray-200 bg-white px-2 py-1 min-w-48 normal-case">
+					<Search size={11} className="text-gray-300 shrink-0" />
+					<input
+						type="text"
+						placeholder="Search teams…"
+						value={teamSearch}
+						onChange={(e) => setTeamSearch(e.target.value)}
+						className="flex-1 text-xs text-editorial-ink placeholder:text-gray-300 focus:outline-none font-normal tracking-normal"
+					/>
+					{teamSearch && (
+						<button
+							onClick={() => setTeamSearch("")}
+							className="text-gray-300 hover:text-gray-500 text-[10px] font-black"
+						>
+							✕
+						</button>
+					)}
+				</div>
 			</div>
 
 			{/* Existing teams */}
 			<CollapsiblePanel
-				title={`${category} Teams (${teams.length})`}
+				title={
+					teamSearch.trim()
+						? `${category} Teams (${filteredTeams.length} of ${teams.length})`
+						: `${category} Teams (${teams.length})`
+				}
 				open={panelTeamsOpen}
 				onToggle={() => setPanelTeamsOpen((v) => !v)}
 			>
@@ -1565,6 +1627,10 @@ function TeamsTab({
 				) : teams.length === 0 ? (
 					<div className="p-6 text-center text-sm text-gray-400">
 						No {category} teams yet. Add some below.
+					</div>
+				) : filteredTeams.length === 0 ? (
+					<div className="p-6 text-center text-sm text-gray-400">
+						No teams match &ldquo;{teamSearch}&rdquo;.
 					</div>
 				) : (
 					<div className="overflow-x-auto">
@@ -1603,7 +1669,7 @@ function TeamsTab({
 								</tr>
 							</thead>
 							<tbody>
-								{teams.map((team, i) => {
+								{filteredTeams.map((team, i) => {
 									const isEditing = editingId === team.id;
 									const rowClass = `border-b border-gray-100 ${i % 2 === 0 ? "bg-white" : "bg-editorial-bg/50"}`;
 									return (
@@ -2766,5 +2832,777 @@ function MatchCard({
 				</div>
 			)}
 		</div>
+	);
+}
+
+// ─── ScoreekeepersTab ─────────────────────────────────────────────────────────
+
+function ScoreekeepersTab() {
+	const [scorekeepers, setScorekeepers] = useState<ScorekeeperProfile[]>([]);
+	const [isLoading, setIsLoading] = useState(true);
+	const [addOpen, setAddOpen] = useState(false);
+	const [addEmail, setAddEmail] = useState("");
+	const [addTable, setAddTable] = useState("");
+	const [isAdding, setIsAdding] = useState(false);
+	const [addError, setAddError] = useState<string | null>(null);
+	const [newCred, setNewCred] = useState<{
+		email: string;
+		password: string;
+		emailSent: boolean;
+	} | null>(null);
+	const [showPwd, setShowPwd] = useState(false);
+	const [copied, setCopied] = useState(false);
+	const [deletingId, setDeletingId] = useState<string | null>(null);
+	const [isDeleting, setIsDeleting] = useState(false);
+	const [editingId, setEditingId] = useState<string | null>(null);
+	const [editTable, setEditTable] = useState("");
+	const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+	async function loadScorekeepers() {
+		setIsLoading(true);
+		const { data } = await supabase
+			.from("user_profiles")
+			.select("id, email, table_number, created_at, role")
+			.eq("role", "scorekeeper")
+			.order("created_at", { ascending: false });
+		setScorekeepers((data as ScorekeeperProfile[]) ?? []);
+		setIsLoading(false);
+	}
+
+	useEffect(() => {
+		loadScorekeepers();
+	}, []);
+
+	async function handleAdd() {
+		const trimmed = addEmail.trim();
+		if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+			setAddError("Enter a valid email address.");
+			return;
+		}
+		setIsAdding(true);
+		setAddError(null);
+		const tableNum = addTable.trim() ? parseInt(addTable, 10) : null;
+		const { data, error } = await supabase.functions.invoke(
+			"manage-scorekeepers",
+			{
+				body: {
+					action: "create",
+					email: trimmed,
+					table_number: tableNum,
+				},
+			},
+		);
+		if (error || (data as { error?: string })?.error) {
+			setAddError(
+				(data as { error?: string })?.error ??
+					error?.message ??
+					"Failed to create scorekeeper.",
+			);
+		} else {
+			setNewCred({
+				email: trimmed,
+				password: (data as { password: string }).password,
+				emailSent: (data as { emailSent: boolean }).emailSent,
+			});
+			setAddEmail("");
+			setAddTable("");
+			setAddOpen(false);
+			await loadScorekeepers();
+		}
+		setIsAdding(false);
+	}
+
+	async function handleDelete(userId: string) {
+		setIsDeleting(true);
+		await supabase.functions.invoke("manage-scorekeepers", {
+			body: { action: "delete", userId },
+		});
+		setDeletingId(null);
+		setIsDeleting(false);
+		await loadScorekeepers();
+	}
+
+	async function handleSaveEdit(userId: string) {
+		setIsSavingEdit(true);
+		const tableNum = editTable.trim() ? parseInt(editTable, 10) : null;
+		await supabase.functions.invoke("manage-scorekeepers", {
+			body: { action: "update", userId, table_number: tableNum },
+		});
+		setEditingId(null);
+		setIsSavingEdit(false);
+		await loadScorekeepers();
+	}
+
+	function copyCredentials(email: string, password: string) {
+		navigator.clipboard.writeText(`Email: ${email}\nPassword: ${password}`);
+		setCopied(true);
+		setTimeout(() => setCopied(false), 2000);
+	}
+
+	return (
+		<div className="space-y-4">
+			{/* ── New credential banner ──────────────────────────────────── */}
+			{newCred && (
+				<div className="border border-editorial-green/40 bg-editorial-green/5 p-4 space-y-3">
+					<div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-editorial-green">
+						<ShieldCheck size={14} />
+						Scorekeeper Account Created
+					</div>
+					<p className="text-xs text-gray-600">
+						{newCred.emailSent ? (
+							<>
+								Credentials were emailed to{" "}
+								<strong>{newCred.email}</strong>.
+							</>
+						) : (
+							<>
+								Email sending is not configured — share these
+								credentials manually with the scorekeeper:
+							</>
+						)}
+					</p>
+					<div className="bg-white border border-gray-200 p-3 font-mono text-sm space-y-2">
+						<div className="flex items-center gap-3">
+							<span className="text-gray-400 w-20 text-xs font-sans tracking-wide">
+								Email
+							</span>
+							<span className="text-editorial-ink font-semibold flex-1">
+								{newCred.email}
+							</span>
+						</div>
+						<div className="flex items-center gap-3">
+							<span className="text-gray-400 w-20 text-xs font-sans tracking-wide">
+								Password
+							</span>
+							<span className="flex-1 text-editorial-ink font-semibold tracking-wider text-base">
+								{showPwd
+									? newCred.password
+									: "•".repeat(newCred.password.length)}
+							</span>
+							<button
+								onClick={() => setShowPwd((v) => !v)}
+								className="p-1 text-gray-400 hover:text-editorial-ink transition-colors"
+								title={showPwd ? "Hide" : "Reveal"}
+							>
+								{showPwd ? (
+									<EyeOff size={13} />
+								) : (
+									<Eye size={13} />
+								)}
+							</button>
+							<button
+								onClick={() =>
+									copyCredentials(
+										newCred.email,
+										newCred.password,
+									)
+								}
+								className="flex items-center gap-1 text-xs px-2 py-1 border border-gray-200 hover:border-editorial-gold hover:bg-editorial-gold/5 transition-colors"
+							>
+								<Copy size={11} />
+								{copied ? "Copied!" : "Copy"}
+							</button>
+						</div>
+					</div>
+					<button
+						onClick={() => setNewCred(null)}
+						className="text-xs text-gray-400 hover:text-gray-600 underline"
+					>
+						Dismiss
+					</button>
+				</div>
+			)}
+
+			{/* ── Add scorekeeper panel ──────────────────────────────────── */}
+			<CollapsiblePanel
+				title="Add Scorekeeper"
+				open={addOpen}
+				onToggle={() => setAddOpen((v) => !v)}
+				accent
+			>
+				<div className="p-4 space-y-3">
+					<div className="flex gap-3 flex-wrap">
+						<div className="flex-1 min-w-52">
+							<label className="text-[10px] uppercase tracking-widest font-black text-gray-400 mb-1 block">
+								Email *
+							</label>
+							<input
+								type="email"
+								placeholder="scorekeeper@example.com"
+								value={addEmail}
+								onChange={(e) => setAddEmail(e.target.value)}
+								onKeyDown={(e) =>
+									e.key === "Enter" && handleAdd()
+								}
+								className="w-full border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:border-editorial-gold text-editorial-ink placeholder:text-gray-300"
+							/>
+						</div>
+						<div className="w-32">
+							<label className="text-[10px] uppercase tracking-widest font-black text-gray-400 mb-1 block">
+								Table # (opt.)
+							</label>
+							<input
+								type="number"
+								placeholder="—"
+								value={addTable}
+								onChange={(e) => setAddTable(e.target.value)}
+								className="w-full border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:border-editorial-gold text-editorial-ink placeholder:text-gray-300"
+							/>
+						</div>
+					</div>
+					{addError && (
+						<p className="text-xs text-red-600 flex items-center gap-1">
+							<AlertCircle size={11} /> {addError}
+						</p>
+					)}
+					<button
+						onClick={handleAdd}
+						disabled={isAdding}
+						className="flex items-center gap-1.5 px-4 py-2 bg-editorial-ink text-white text-xs font-black uppercase tracking-widest hover:bg-editorial-gold hover:text-editorial-ink transition-colors disabled:opacity-40"
+					>
+						{isAdding ? (
+							<Loader2 size={12} className="animate-spin" />
+						) : (
+							<Plus size={12} />
+						)}
+						{isAdding ? "Creating…" : "Create Account"}
+					</button>
+				</div>
+			</CollapsiblePanel>
+
+			{/* ── Scorekeepers list ──────────────────────────────────────── */}
+			<div className="border border-gray-200 bg-white">
+				<div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-200 bg-gray-50">
+					<span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+						Active Scorekeepers ({scorekeepers.length})
+					</span>
+					<button
+						onClick={loadScorekeepers}
+						className="text-gray-400 hover:text-editorial-ink transition-colors p-1"
+					>
+						<RefreshCw
+							size={12}
+							className={isLoading ? "animate-spin" : ""}
+						/>
+					</button>
+				</div>
+
+				{isLoading ? (
+					<div className="py-10 text-center text-sm text-gray-400">
+						Loading…
+					</div>
+				) : scorekeepers.length === 0 ? (
+					<div className="py-10 text-center text-sm text-gray-400">
+						No scorekeepers yet. Add one above.
+					</div>
+				) : (
+					<table className="w-full text-sm">
+						<thead>
+							<tr className="border-b border-gray-100 bg-gray-50/50">
+								<th className="text-left px-4 py-2 text-[10px] font-black uppercase tracking-widest text-gray-400">
+									Email
+								</th>
+								<th className="text-left px-4 py-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-28">
+									Table
+								</th>
+								<th className="text-left px-4 py-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-28">
+									Added
+								</th>
+								<th className="px-4 py-2 w-20" />
+							</tr>
+						</thead>
+						<tbody className="divide-y divide-gray-100">
+							{scorekeepers.map((sk) => (
+								<tr key={sk.id} className="hover:bg-gray-50/60">
+									<td className="px-4 py-2.5 text-editorial-ink font-medium">
+										{sk.email ?? (
+											<span className="text-gray-300 italic text-xs">
+												no email
+											</span>
+										)}
+									</td>
+									<td className="px-4 py-2.5">
+										{editingId === sk.id ? (
+											<div className="flex items-center gap-1.5">
+												<input
+													type="number"
+													value={editTable}
+													onChange={(e) =>
+														setEditTable(
+															e.target.value,
+														)
+													}
+													onKeyDown={(e) => {
+														if (e.key === "Enter")
+															handleSaveEdit(
+																sk.id,
+															);
+														if (e.key === "Escape")
+															setEditingId(null);
+													}}
+													autoFocus
+													className="w-16 border border-editorial-gold px-2 py-1 text-sm focus:outline-none"
+													placeholder="—"
+												/>
+												<button
+													onClick={() =>
+														handleSaveEdit(sk.id)
+													}
+													disabled={isSavingEdit}
+													className="text-xs px-2 py-1 bg-editorial-green text-white font-bold hover:opacity-90 disabled:opacity-40"
+												>
+													{isSavingEdit
+														? "…"
+														: "Save"}
+												</button>
+												<button
+													onClick={() =>
+														setEditingId(null)
+													}
+													className="text-xs text-gray-400 hover:text-gray-600 px-1"
+												>
+													✕
+												</button>
+											</div>
+										) : (
+											<span className="text-gray-600">
+												{sk.table_number ?? (
+													<span className="text-gray-300">
+														—
+													</span>
+												)}
+											</span>
+										)}
+									</td>
+									<td className="px-4 py-2.5 text-gray-400 text-xs">
+										{new Date(
+											sk.created_at,
+										).toLocaleDateString()}
+									</td>
+									<td className="px-4 py-2.5">
+										<div className="flex items-center gap-0.5 justify-end">
+											{editingId !== sk.id && (
+												<button
+													onClick={() => {
+														setEditingId(sk.id);
+														setEditTable(
+															String(
+																sk.table_number ??
+																	"",
+															),
+														);
+													}}
+													className="p-1.5 text-gray-400 hover:text-editorial-ink transition-colors"
+													title="Edit table assignment"
+												>
+													<Pencil size={13} />
+												</button>
+											)}
+											<button
+												onClick={() =>
+													setDeletingId(sk.id)
+												}
+												className="p-1.5 text-gray-400 hover:text-red-600 transition-colors"
+												title="Remove scorekeeper"
+											>
+												<Trash2 size={13} />
+											</button>
+										</div>
+									</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				)}
+			</div>
+
+			{/* ── Audit trail ────────────────────────────────────────────── */}
+			<AuditTrailPanel />
+
+			{/* ── Delete confirmation modal ──────────────────────────────── */}
+			{deletingId && (
+				<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+					<div className="bg-white border-2 border-editorial-ink p-6 max-w-sm w-full mx-4 shadow-[6px_6px_0px_0px_rgba(26,26,26,1)]">
+						<p className="font-black text-editorial-ink mb-1">
+							Remove scorekeeper?
+						</p>
+						<p className="text-sm text-gray-600 mb-5">
+							<strong>
+								{scorekeepers.find((s) => s.id === deletingId)
+									?.email ?? "This user"}
+							</strong>{" "}
+							will lose access immediately and cannot sign in.
+						</p>
+						<div className="flex gap-3">
+							<button
+								onClick={() => handleDelete(deletingId)}
+								disabled={isDeleting}
+								className="flex-1 px-4 py-2 bg-red-600 text-white text-xs font-black uppercase tracking-widest hover:bg-red-700 disabled:opacity-40 transition-colors"
+							>
+								{isDeleting ? "Removing…" : "Remove"}
+							</button>
+							<button
+								onClick={() => setDeletingId(null)}
+								disabled={isDeleting}
+								className="flex-1 px-4 py-2 border border-gray-300 text-xs font-black uppercase tracking-widest hover:border-editorial-ink transition-colors"
+							>
+								Cancel
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+		</div>
+	);
+}
+
+// ─── SearchableSelect ─────────────────────────────────────────────────────────
+
+function SearchableSelect({
+	options,
+	value,
+	onChange,
+	placeholder,
+}: {
+	options: string[];
+	value: string;
+	onChange: (v: string) => void;
+	placeholder: string;
+}) {
+	const [query, setQuery] = useState("");
+	const [open, setOpen] = useState(false);
+	const containerRef = useRef<HTMLDivElement>(null);
+	const inputRef = useRef<HTMLInputElement>(null);
+
+	const filtered = query
+		? options.filter((o) => o.toLowerCase().includes(query.toLowerCase()))
+		: options;
+
+	useEffect(() => {
+		function onClickOutside(e: MouseEvent) {
+			if (
+				containerRef.current &&
+				!containerRef.current.contains(e.target as Node)
+			) {
+				setOpen(false);
+				setQuery("");
+			}
+		}
+		document.addEventListener("mousedown", onClickOutside);
+		return () => document.removeEventListener("mousedown", onClickOutside);
+	}, []);
+
+	return (
+		<div ref={containerRef} className="relative min-w-44">
+			<button
+				type="button"
+				onClick={() => {
+					const next = !open;
+					setOpen(next);
+					if (next) setTimeout(() => inputRef.current?.focus(), 0);
+				}}
+				className={`w-full flex items-center gap-1.5 border px-2 h-[30px] text-xs text-left transition-colors focus:outline-none ${
+					value
+						? "border-editorial-gold bg-editorial-gold/5 text-editorial-ink"
+						: "border-gray-200 text-gray-400"
+				}`}
+			>
+				<span className="flex-1 truncate font-medium">
+					{value || placeholder}
+				</span>
+				{value && (
+					<span
+						role="button"
+						onClick={(e) => {
+							e.stopPropagation();
+							onChange("");
+							setOpen(false);
+						}}
+						className="text-gray-400 hover:text-gray-700 font-black text-[10px] px-0.5 leading-none"
+					>
+						✕
+					</span>
+				)}
+				<ChevronDown size={11} className="text-gray-400 shrink-0" />
+			</button>
+
+			{open && (
+				<div className="absolute top-full left-0 z-30 w-full min-w-52 bg-white border border-gray-200 shadow-lg mt-0.5">
+					<div className="p-1.5 border-b border-gray-100">
+						<input
+							ref={inputRef}
+							type="text"
+							value={query}
+							onChange={(e) => setQuery(e.target.value)}
+							placeholder="Search…"
+							className="w-full text-xs px-2 py-1 focus:outline-none border border-gray-200 focus:border-editorial-gold"
+						/>
+					</div>
+					<div className="max-h-52 overflow-y-auto">
+						{filtered.length === 0 ? (
+							<p className="px-3 py-2 text-xs text-gray-400">
+								No matches
+							</p>
+						) : (
+							filtered.map((opt) => (
+								<button
+									key={opt}
+									type="button"
+									onClick={() => {
+										onChange(opt);
+										setOpen(false);
+										setQuery("");
+									}}
+									className={`w-full text-left px-3 py-2 text-xs hover:bg-editorial-gold/10 transition-colors ${
+										value === opt
+											? "bg-editorial-gold/10 font-semibold text-editorial-ink"
+											: "text-editorial-ink"
+									}`}
+								>
+									{opt}
+								</button>
+							))
+						)}
+					</div>
+				</div>
+			)}
+		</div>
+	);
+}
+
+// ─── AuditTrailPanel ──────────────────────────────────────────────────────────
+
+const SCORE_COL_LABELS: Record<string, string> = {
+	team_1_r1: "Team 1 R1",
+	team_1_r2: "Team 1 R2",
+	team_1_r3: "Team 1 R3",
+	team_1_r4: "Team 1 R4",
+	team_2_r1: "Team 2 R1",
+	team_2_r2: "Team 2 R2",
+	team_2_r3: "Team 2 R3",
+	team_2_r4: "Team 2 R4",
+};
+
+function formatRelTime(iso: string): string {
+	const diff = Date.now() - new Date(iso).getTime();
+	const s = Math.floor(diff / 1000);
+	if (s < 60) return "just now";
+	const m = Math.floor(s / 60);
+	if (m < 60) return `${m}m ago`;
+	const h = Math.floor(m / 60);
+	if (h < 24) return `${h}h ago`;
+	return new Date(iso).toLocaleDateString();
+}
+
+function AuditTrailPanel() {
+	const [open, setOpen] = useState(true);
+	const [logs, setLogs] = useState<ScoreAuditLog[]>([]);
+	const [isLoading, setIsLoading] = useState(false);
+	const [categoryFilter, setCategoryFilter] = useState<"all" | Category>(
+		"all",
+	);
+	const [scorekeeperFilter, setScorekeeperFilter] = useState("");
+	const [teamFilter, setTeamFilter] = useState("");
+
+	async function loadLogs() {
+		setIsLoading(true);
+		let q = supabase
+			.from("score_audit_log")
+			.select("*")
+			.order("changed_at", { ascending: false })
+			.limit(200);
+		if (categoryFilter !== "all") q = q.eq("category", categoryFilter);
+		const { data } = await q;
+		setLogs((data as ScoreAuditLog[]) ?? []);
+		setIsLoading(false);
+	}
+
+	useEffect(() => {
+		if (open) loadLogs();
+	}, [open, categoryFilter]);
+
+	// Options derived from the loaded batch
+	const scorekeeperOptions = useMemo(
+		() =>
+			[
+				...new Set(logs.map((l) => l.scorer_email).filter(Boolean)),
+			] as string[],
+		[logs],
+	);
+
+	const teamOptions = useMemo(
+		() =>
+			[
+				...new Set(
+					[
+						...logs.map((l) => l.team_1_name),
+						...logs.map((l) => l.team_2_name),
+					].filter(Boolean),
+				),
+			].sort() as string[],
+		[logs],
+	);
+
+	// Client-side filter on top of the server-fetched batch
+	const filteredLogs = useMemo(
+		() =>
+			logs.filter((log) => {
+				if (scorekeeperFilter && log.scorer_email !== scorekeeperFilter)
+					return false;
+				if (
+					teamFilter &&
+					log.team_1_name !== teamFilter &&
+					log.team_2_name !== teamFilter
+				)
+					return false;
+				return true;
+			}),
+		[logs, scorekeeperFilter, teamFilter],
+	);
+
+	const activeFilterCount =
+		(categoryFilter !== "all" ? 1 : 0) +
+		(scorekeeperFilter ? 1 : 0) +
+		(teamFilter ? 1 : 0);
+
+	return (
+		<CollapsiblePanel
+			title={`Audit Trail${activeFilterCount > 0 ? ` · ${activeFilterCount} filter${activeFilterCount !== 1 ? "s" : ""}` : ""}`}
+			open={open}
+			onToggle={() => setOpen((v) => !v)}
+		>
+			<div className="p-4 space-y-3">
+				{/* Filter row */}
+				<div className="flex items-center gap-2 flex-wrap">
+					{/* Category — plain select (only 3 options, no search needed) */}
+					<select
+						value={categoryFilter}
+						onChange={(e) =>
+							setCategoryFilter(
+								e.target.value as "all" | Category,
+							)
+						}
+						className="border border-gray-200 px-2 h-[30px] text-xs font-semibold focus:outline-none focus:border-editorial-gold text-editorial-ink"
+					>
+						<option value="all">All categories</option>
+						<option value="Junior">Junior</option>
+						<option value="Senior">Senior</option>
+					</select>
+
+					{/* Scorekeeper searchable dropdown */}
+					<SearchableSelect
+						options={scorekeeperOptions}
+						value={scorekeeperFilter}
+						onChange={setScorekeeperFilter}
+						placeholder="All scorekeepers"
+					/>
+
+					{/* Team searchable dropdown */}
+					<SearchableSelect
+						options={teamOptions}
+						value={teamFilter}
+						onChange={setTeamFilter}
+						placeholder="All teams"
+					/>
+
+					<button
+						onClick={loadLogs}
+						className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-editorial-ink transition-colors h-[30px] px-1"
+					>
+						<RefreshCw
+							size={11}
+							className={isLoading ? "animate-spin" : ""}
+						/>
+						Refresh
+					</button>
+
+					{logs.length > 0 && (
+						<span className="text-[10px] text-gray-400 ml-auto self-center">
+							{filteredLogs.length}
+							{filteredLogs.length !== logs.length
+								? ` of ${logs.length}`
+								: ""}{" "}
+							entr
+							{filteredLogs.length !== 1 ? "ies" : "y"}
+						</span>
+					)}
+				</div>
+
+				{/* Log entries */}
+				{isLoading ? (
+					<div className="py-6 text-center text-sm text-gray-400">
+						Loading…
+					</div>
+				) : filteredLogs.length === 0 ? (
+					<div className="py-6 text-center text-sm text-gray-400">
+						{logs.length === 0
+							? "No score changes recorded yet."
+							: "No entries match the current filters."}
+					</div>
+				) : (
+					<div className="space-y-1.5 max-h-96 overflow-y-auto">
+						{filteredLogs.map((log) => (
+							<div
+								key={log.id}
+								className="flex gap-3 p-3 border border-gray-100 bg-white hover:border-gray-200 text-xs"
+							>
+								{/* Left: who + when */}
+								<div className="shrink-0 w-40">
+									<p className="font-semibold text-editorial-ink truncate">
+										{log.scorer_email ?? (
+											<span className="text-gray-400 italic">
+												Unknown
+											</span>
+										)}
+									</p>
+									<p className="text-gray-400 flex items-center gap-1 mt-0.5">
+										<Clock size={9} />
+										{formatRelTime(log.changed_at)}
+									</p>
+									{log.phase && (
+										<p className="text-gray-400 text-[10px] mt-0.5 uppercase tracking-wide">
+											{log.phase} · {log.category}
+										</p>
+									)}
+								</div>
+
+								{/* Right: match + changes */}
+								<div className="flex-1 min-w-0">
+									{(log.team_1_name || log.team_2_name) && (
+										<p className="font-semibold text-editorial-ink mb-1 truncate">
+											{log.team_1_name ?? "TBD"} vs{" "}
+											{log.team_2_name ?? "TBD"}
+										</p>
+									)}
+									<div className="flex flex-wrap gap-x-3 gap-y-0.5">
+										{Object.entries(log.changes).map(
+											([col, diff]) => (
+												<span
+													key={col}
+													className="text-gray-600"
+												>
+													<span className="font-medium text-gray-500">
+														{SCORE_COL_LABELS[
+															col
+														] ?? col}
+													</span>{" "}
+													<span className="text-gray-400">
+														{diff.from ?? "—"}
+													</span>{" "}
+													→{" "}
+													<span className="font-semibold text-editorial-ink">
+														{diff.to ?? "—"}
+													</span>
+												</span>
+											),
+										)}
+									</div>
+								</div>
+							</div>
+						))}
+					</div>
+				)}
+			</div>
+		</CollapsiblePanel>
 	);
 }

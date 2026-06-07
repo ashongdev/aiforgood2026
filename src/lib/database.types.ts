@@ -12,7 +12,29 @@ export interface UserProfile {
   id: string
   role: Role
   table_number: number | null
+  email: string | null
   created_at: string
+}
+
+export interface ScorekeeperProfile {
+  id: string
+  role: 'scorekeeper'
+  table_number: number | null
+  email: string | null
+  created_at: string
+}
+
+export interface ScoreAuditLog {
+  id: string
+  match_id: string | null
+  changed_by: string | null
+  scorer_email: string | null
+  changed_at: string
+  phase: string | null
+  category: string | null
+  team_1_name: string | null
+  team_2_name: string | null
+  changes: Record<string, { from: number | null; to: number | null }>
 }
 
 export interface Team {

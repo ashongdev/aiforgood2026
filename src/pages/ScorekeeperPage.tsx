@@ -2,6 +2,7 @@ import { LogOut, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { useEdgeColumnResize } from "../hooks/useEdgeColumnResize";
 import type { Category, MatchWithTeams, Phase } from "../lib/database.types";
 import { supabase } from "../lib/supabase";
 
@@ -568,6 +569,11 @@ function QualifiersGrid({
 	onCommit,
 	getLiveTotal,
 }: QualifiersGridProps) {
+	const qualifiersResize = useEdgeColumnResize({
+		columnCount: 16,
+		minColumnWidth: 52,
+	});
+
 	const COL_ORDER: QualifierCol[] = [
 		"team_1_r1",
 		"team_1_r2",
@@ -580,7 +586,15 @@ function QualifiersGrid({
 	];
 
 	return (
-		<table className="w-full text-sm border-collapse">
+		<table
+			className="w-full text-sm border-collapse [&_th:not(:last-child)]:border-r [&_th:not(:last-child)]:border-gray-200/70 [&_td:not(:last-child)]:border-r [&_td:not(:last-child)]:border-gray-200/70"
+			{...qualifiersResize.tableProps}
+		>
+			<colgroup>
+				{Array.from({ length: 16 }, (_, i) => (
+					<col key={i} style={qualifiersResize.getColumnStyle(i)} />
+				))}
+			</colgroup>
 			<thead>
 				<tr className="bg-editorial-ink text-white text-[10px] uppercase tracking-widest">
 					<th className="px-3 py-2 text-left font-black w-6">#</th>
@@ -828,6 +842,11 @@ function EliminationGrid({
 	getLiveTotal,
 	getSuggestedWinner,
 }: EliminationGridProps) {
+	const eliminationResize = useEdgeColumnResize({
+		columnCount: 17,
+		minColumnWidth: 52,
+	});
+
 	const T1_COLS = (
 		["team_1_r1", "team_1_r2", "team_1_r3", "team_1_r4"] as QualifierCol[]
 	).slice(0, activeRounds);
@@ -838,7 +857,15 @@ function EliminationGrid({
 	const ROUND_LABELS = ["R1", "R2", "R3", "R4"].slice(0, activeRounds);
 
 	return (
-		<table className="w-full text-sm border-collapse">
+		<table
+			className="w-full text-sm border-collapse [&_th:not(:last-child)]:border-r [&_th:not(:last-child)]:border-gray-200/70 [&_td:not(:last-child)]:border-r [&_td:not(:last-child)]:border-gray-200/70"
+			{...eliminationResize.tableProps}
+		>
+			<colgroup>
+				{Array.from({ length: 17 }, (_, i) => (
+					<col key={i} style={eliminationResize.getColumnStyle(i)} />
+				))}
+			</colgroup>
 			<thead>
 				<tr className="bg-editorial-ink text-white text-[10px] uppercase tracking-widest">
 					<th className="px-3 py-2 text-left font-black w-6">#</th>

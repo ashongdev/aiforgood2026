@@ -17,6 +17,7 @@ import {
 	Users,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
+import { useEdgeColumnResize } from "../hooks/useEdgeColumnResize";
 import { supabase } from "../lib/supabase";
 import type { Category, MatchWithTeams, Phase, Team } from "../lib/database.types";
 
@@ -879,6 +880,15 @@ export function AdminPage() {
 // ─── TeamsTab ─────────────────────────────────────────────────────────────────
 
 function TeamsTab({ category, onTeamsChanged }: { category: Category; onTeamsChanged: () => void }) {
+	const teamsResize = useEdgeColumnResize({
+		columnCount: 6,
+		minColumnWidth: 56,
+	});
+	const bulkResize = useEdgeColumnResize({
+		columnCount: 8,
+		minColumnWidth: 56,
+	});
+
 	const [teams, setTeams] = useState<Team[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
 	const [editingId, setEditingId] = useState<string | null>(null);
@@ -1029,7 +1039,15 @@ function TeamsTab({ category, onTeamsChanged }: { category: Category; onTeamsCha
 					<div className="p-6 text-center text-sm text-gray-400">No {category} teams yet. Add some below.</div>
 				) : (
 					<div className="overflow-x-auto">
-						<table className="w-full text-sm border-collapse">
+						<table
+							className="w-full text-sm border-collapse [&_th:not(:last-child)]:border-r [&_th:not(:last-child)]:border-gray-200/70 [&_td:not(:last-child)]:border-r [&_td:not(:last-child)]:border-gray-200/70"
+							{...teamsResize.tableProps}
+						>
+							<colgroup>
+								{Array.from({ length: 6 }, (_, i) => (
+									<col key={i} style={teamsResize.getColumnStyle(i)} />
+								))}
+							</colgroup>
 							<thead>
 								<tr className="bg-editorial-ink text-white text-[10px] uppercase tracking-widest">
 									<th className="px-3 py-2 text-left font-black w-8">#</th>
@@ -1166,7 +1184,15 @@ function TeamsTab({ category, onTeamsChanged }: { category: Category; onTeamsCha
 
 					{/* Spreadsheet table */}
 					<div className="overflow-x-auto border border-gray-200">
-						<table className="w-full text-sm border-collapse">
+						<table
+							className="w-full text-sm border-collapse [&_th:not(:last-child)]:border-r [&_th:not(:last-child)]:border-gray-200/70 [&_td:not(:last-child)]:border-r [&_td:not(:last-child)]:border-gray-200/70"
+							{...bulkResize.tableProps}
+						>
+							<colgroup>
+								{Array.from({ length: 8 }, (_, i) => (
+									<col key={i} style={bulkResize.getColumnStyle(i)} />
+								))}
+							</colgroup>
 							<thead>
 								<tr className="bg-editorial-ink text-white text-[10px] uppercase tracking-widest">
 									<th className="px-2 py-2 text-center font-black w-8">#</th>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
 	AlertCircle,
@@ -52,10 +52,6 @@ function nextPhaseFor(phase: Phase): Phase | null {
 	return chain[phase] ?? null;
 }
 
-/**
- * Bracket-correct seeding: top qualifier seed faces the lowest seed first
- * so the best two teams cannot meet before the Final.
- */
 function seedPairings(n: AdvanceCount): [number, number][] {
 	if (n === 16) return [[1,16],[8,9],[4,13],[5,12],[2,15],[7,10],[3,14],[6,11]];
 	if (n === 8)  return [[1,8],[4,5],[2,7],[3,6]];
@@ -95,6 +91,7 @@ export function AdminPage() {
 	const navigate = useNavigate();
 
 	const [category, setCategory] = useState<Category>("Junior");
+	const [activeTab, setActiveTab] = useState<"qualifiers" | "bracket">("qualifiers");
 
 	// Data
 	const [allTeams, setAllTeams] = useState<Team[]>([]);
@@ -120,8 +117,11 @@ export function AdminPage() {
 	const [winnerConfirming, setWinnerConfirming] = useState<string | null>(null);
 	const [overrideMatchId, setOverrideMatchId] = useState<string | null>(null);
 
-	// UI state
+	// Panel open states
+	const [addMatchOpen, setAddMatchOpen] = useState(true);
+	const [matchListOpen, setMatchListOpen] = useState(true);
 	const [standingsOpen, setStandingsOpen] = useState(true);
+	const [advancePanelOpen, setAdvancePanelOpen] = useState(true);
 
 	// Phase locks (keyed by phase string, value = lock_type)
 	const [phaseLocks, setPhaseLocks] = useState<Record<string, string>>({});
@@ -169,7 +169,6 @@ export function AdminPage() {
 		loadPhaseLocks();
 	}, [category]);
 
-	// Realtime: reload standings as scorekeepers enter scores
 	useEffect(() => {
 		const channel = supabase
 			.channel(`admin-realtime-${category}`)
@@ -196,7 +195,7 @@ export function AdminPage() {
 		if (!error) loadPhaseLocks();
 	}
 
-	// ── Qualifier match creation ────────────────────────────────────────────────
+	// ── Qualifier match management ──────────────────────────────────────────────
 
 	async function handleCreateMatch() {
 		setCreateError(null);
@@ -260,6 +259,11 @@ export function AdminPage() {
 		{},
 	);
 	const bracketAlreadyExists = (elimByPhase[targetPhase]?.length ?? 0) > 0;
+	const activeBracketPhases = ELIM_PHASES.filter((p) => (elimByPhase[p]?.length ?? 0) > 0);
+	const pendingWinners = activeBracketPhases.reduce(
+		(n, p) => n + (elimByPhase[p]?.filter((m) => !m.winner_id).length ?? 0), 0,
+	);
+	const scoredTeams = standings.filter((s) => s.best_round > 0).length;
 
 	async function handleAdvanceTeams() {
 		if (topTeams.length < advanceCount) {
@@ -291,12 +295,14 @@ export function AdminPage() {
 			setAdvanceSuccess(`${advanceCount} teams seeded into ${targetPhase}.`);
 			setShowSeedPreview(false);
 			loadData();
+			setActiveTab("bracket");
 		}
 	}
 
 	async function handleAdvanceWinners(fromPhase: Phase) {
 		const phaseMatches = elimByPhase[fromPhase] ?? [];
 		const unconfirmed = phaseMatches.filter((m) => !m.winner_id);
+
 		if (unconfirmed.length > 0) {
 			alert(`${unconfirmed.length} match(es) in ${fromPhase} still need a confirmed winner.`);
 			return;
@@ -359,197 +365,254 @@ export function AdminPage() {
 	return (
 		<div className="min-h-screen bg-editorial-bg text-editorial-ink font-sans">
 
-			{/* Top bar */}
-			<div className="sticky top-0 z-20 bg-editorial-ink text-white border-b-4 border-editorial-gold px-4 py-3 flex items-center gap-3 flex-wrap">
-				<Trophy size={15} className="text-editorial-gold shrink-0" />
-				<span className="text-xs font-black uppercase tracking-widest mr-auto">Admin Dashboard</span>
+			{/* Sticky header: top bar + tab bar */}
+			<div className="sticky top-0 z-20">
+				{/* Top bar */}
+				<div className="bg-editorial-ink text-white border-b border-white/10 px-4 py-3 flex items-center gap-3 flex-wrap">
+					<Trophy size={15} className="text-editorial-gold shrink-0" />
+					<span className="text-xs font-black uppercase tracking-widest mr-auto">Admin Dashboard</span>
 
-				<div className="flex border border-white/20">
-					{(["Junior", "Senior"] as Category[]).map((c) => (
-						<button key={c} onClick={() => setCategory(c)}
-							className={`px-4 py-1.5 text-xs font-black uppercase tracking-widest transition-colors ${
-								category === c ? "bg-editorial-gold text-editorial-ink" : "text-white/60 hover:text-white"
-							}`}
-						>
-							{c}
-						</button>
-					))}
+					<div className="flex border border-white/20">
+						{(["Junior", "Senior"] as Category[]).map((c) => (
+							<button key={c} onClick={() => setCategory(c)}
+								className={`px-4 py-1.5 text-xs font-black uppercase tracking-widest transition-colors ${
+									category === c ? "bg-editorial-gold text-editorial-ink" : "text-white/60 hover:text-white"
+								}`}
+							>
+								{c}
+							</button>
+						))}
+					</div>
+
+					<button onClick={loadData} className="p-1.5 hover:text-editorial-gold transition-colors" title="Refresh">
+						<RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
+					</button>
+					<a href="/scorekeeper" className="text-xs text-white/60 hover:text-editorial-gold transition-colors uppercase tracking-widest">
+						Scores
+					</a>
+					<a href="/" className="text-xs text-white/60 hover:text-editorial-gold transition-colors uppercase tracking-widest">
+						Live
+					</a>
+					<button onClick={async () => { await signOut(); navigate("/login"); }}
+						className="p-1.5 hover:text-editorial-gold transition-colors">
+						<LogOut size={14} />
+					</button>
 				</div>
 
-				<button onClick={loadData} className="p-1.5 hover:text-editorial-gold transition-colors">
-					<RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
-				</button>
-				<a href="/scorekeeper" className="text-xs text-white/60 hover:text-editorial-gold transition-colors uppercase tracking-widest">
-					Score Entry
-				</a>
-				<a href="/" className="text-xs text-white/60 hover:text-editorial-gold transition-colors uppercase tracking-widest">
-					Live View
-				</a>
-				<button onClick={async () => { await signOut(); navigate("/login"); }}
-					className="p-1.5 hover:text-editorial-gold transition-colors">
-					<LogOut size={14} />
-				</button>
+				{/* Tab bar */}
+				<div className="bg-editorial-ink border-b-4 border-editorial-gold flex">
+					<button
+						onClick={() => setActiveTab("qualifiers")}
+						className={`px-5 py-2.5 text-xs font-black uppercase tracking-widest transition-colors border-r border-white/10 ${
+							activeTab === "qualifiers"
+								? "bg-editorial-gold text-editorial-ink"
+								: "text-white/60 hover:text-white hover:bg-white/5"
+						}`}
+					>
+						Qualifiers
+					</button>
+					<button
+						onClick={() => setActiveTab("bracket")}
+						className={`relative px-5 py-2.5 text-xs font-black uppercase tracking-widest transition-colors ${
+							activeTab === "bracket"
+								? "bg-editorial-gold text-editorial-ink"
+								: "text-white/60 hover:text-white hover:bg-white/5"
+						}`}
+					>
+						Bracket
+						{pendingWinners > 0 && (
+							<span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1">
+								{pendingWinners}
+							</span>
+						)}
+					</button>
+				</div>
 			</div>
 
-			<div className="max-w-5xl mx-auto px-4 py-8 space-y-12">
-				{isLoading ? (
-					<div className="py-20 text-center text-sm text-gray-400">Loading…</div>
-				) : (
-					<>
-						{/* ① QUALIFIER MATCH SETUP ───────────────────────────── */}
-						<section>
-							<div className="flex items-start justify-between gap-4 flex-wrap mb-4">
-								<SectionHeader
-									number="01"
-									title="Qualifier Match Setup"
-									subtitle={`${qualifierMatches.length} match(es) created · ${allTeams.length} teams in ${category} division`}
-								/>
-								<LockControl
-									phase="Qualifiers"
-									lockType={phaseLocks["Qualifiers"] ?? null}
-									onLock={(lt) => handleLockPhase("Qualifiers", lt)}
-									onUnlock={() => handleUnlockPhase("Qualifiers")}
-								/>
+			{isLoading ? (
+				<div className="py-20 text-center text-sm text-gray-400">Loading…</div>
+			) : (
+				<div className="max-w-5xl mx-auto px-4 py-6 space-y-3">
+
+					{/* ─ QUALIFIERS TAB ─────────────────────────────────────── */}
+					{activeTab === "qualifiers" && (
+						<>
+							{/* Stats strip */}
+							<div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-gray-400 px-1 pb-1 flex-wrap">
+								<span>{qualifierMatches.length} matches</span>
+								<span className="text-gray-200">·</span>
+								<span>{allTeams.length} teams</span>
+								<span className="text-gray-200">·</span>
+								<span>{scoredTeams} scored</span>
+								{bracketAlreadyExists && (
+									<>
+										<span className="text-gray-200">·</span>
+										<button
+											onClick={() => setActiveTab("bracket")}
+											className="text-editorial-gold hover:underline"
+										>
+											Bracket → {targetPhase}
+										</button>
+									</>
+								)}
+								<div className="ml-auto">
+									<LockControl
+										phase="Qualifiers"
+										lockType={phaseLocks["Qualifiers"] ?? null}
+										onLock={(lt) => handleLockPhase("Qualifiers", lt)}
+										onUnlock={() => handleUnlockPhase("Qualifiers")}
+									/>
+								</div>
 							</div>
 
-							{/* Create form */}
-							<div className="border-2 border-editorial-ink bg-white p-5 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] space-y-4">
-								<p className="text-xs font-black uppercase tracking-widest text-gray-400">
-									Add new qualifier match
-								</p>
-
-								<div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_100px_auto] gap-3 items-end">
-									<div className="space-y-1">
-										<label className="text-[10px] font-black uppercase tracking-widest">Team 1</label>
-										<select
-											value={newTeam1}
-											onChange={(e) => setNewTeam1(e.target.value)}
-											className="w-full border-2 border-editorial-ink px-2 py-2 text-sm bg-editorial-bg focus:outline-none focus:border-editorial-gold"
-										>
-											<option value="">Select team…</option>
-											{allTeams.map((t) => (
-												<option key={t.id} value={t.id}>{t.team_name}</option>
-											))}
-										</select>
-									</div>
-
-									<div className="space-y-1">
-										<label className="text-[10px] font-black uppercase tracking-widest">Team 2</label>
-										<select
-											value={newTeam2}
-											onChange={(e) => setNewTeam2(e.target.value)}
-											className="w-full border-2 border-editorial-ink px-2 py-2 text-sm bg-editorial-bg focus:outline-none focus:border-editorial-gold"
-										>
-											<option value="">Select team…</option>
-											{allTeams
-												.filter((t) => t.id !== newTeam1)
-												.map((t) => (
+							{/* Panel: Add Match */}
+							<CollapsiblePanel
+								title="Add Qualifier Match"
+								open={addMatchOpen}
+								onToggle={() => setAddMatchOpen((v) => !v)}
+							>
+								<div className="p-5 space-y-4">
+									<div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_100px_auto] gap-3 items-end">
+										<div className="space-y-1">
+											<label className="text-[10px] font-black uppercase tracking-widest">Team 1</label>
+											<select
+												value={newTeam1}
+												onChange={(e) => setNewTeam1(e.target.value)}
+												className="w-full border-2 border-editorial-ink px-2 py-2 text-sm bg-editorial-bg focus:outline-none focus:border-editorial-gold"
+											>
+												<option value="">Select team…</option>
+												{allTeams.map((t) => (
 													<option key={t.id} value={t.id}>{t.team_name}</option>
 												))}
-										</select>
-									</div>
-
-									<div className="space-y-1">
-										<label className="text-[10px] font-black uppercase tracking-widest">Table #</label>
-										<input
-											type="number"
-											min={1}
-											value={newTable}
-											onChange={(e) => setNewTable(e.target.value)}
-											placeholder="e.g. 1"
-											className="w-full border-2 border-editorial-ink px-2 py-2 text-sm bg-editorial-bg focus:outline-none focus:border-editorial-gold [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
-										/>
-									</div>
-
-									<button
-										onClick={handleCreateMatch}
-										disabled={isCreating}
-										className="border-2 border-editorial-ink bg-editorial-gold text-editorial-ink px-4 py-2 text-xs font-black uppercase tracking-widest hover:bg-editorial-ink hover:text-white transition-colors disabled:opacity-50 flex items-center gap-1.5 whitespace-nowrap shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]"
-									>
-										<Plus size={13} />
-										{isCreating ? "Adding…" : "Start Match"}
-									</button>
-								</div>
-
-								{createError && (
-									<p className="text-xs text-red-600 flex items-center gap-1.5">
-										<AlertCircle size={12} /> {createError}
-									</p>
-								)}
-
-								<div className="pt-2 border-t border-gray-100 flex items-center justify-between gap-3 flex-wrap">
-									<p className="text-xs text-gray-400">
-										Quickly pair all {allTeams.length} teams into {Math.floor(allTeams.length / 2)} matches
-									</p>
-									<button
-										onClick={handleAutoGenerate}
-										disabled={allTeams.length < 2}
-										className="text-xs font-semibold text-gray-500 border border-gray-200 px-3 py-1.5 hover:border-editorial-ink hover:text-editorial-ink transition-colors disabled:opacity-40"
-									>
-										Auto-generate all matches
-									</button>
-								</div>
-							</div>
-
-							{/* Existing qualifier matches */}
-							{qualifierMatches.length > 0 && (
-								<div className="mt-3 border-2 border-editorial-ink overflow-hidden">
-									<div className="bg-editorial-ink text-white px-3 py-2 flex items-center">
-										<span className="text-[10px] font-black uppercase tracking-widest flex-1">
-											Qualifier Matches ({qualifierMatches.length})
-										</span>
-										<span className="text-[10px] font-black uppercase tracking-widest w-12 text-center">Table</span>
-										<span className="w-8" />
-									</div>
-									{qualifierMatches.map((m, i) => (
-										<div key={m.id}
-											className={`flex items-center gap-3 px-3 py-2.5 border-t border-gray-100 text-sm ${
-												i % 2 === 0 ? "bg-white" : "bg-editorial-bg/40"
-											}`}
-										>
-											<span className="text-[10px] font-black text-gray-400 w-5 shrink-0">{i + 1}</span>
-											<span className="flex-1 font-semibold truncate">
-												{m.team_1?.team_name ?? <em className="text-gray-400">TBD</em>}
-											</span>
-											<span className="text-xs text-gray-400 shrink-0">vs</span>
-											<span className="flex-1 font-semibold truncate text-right">
-												{m.team_2?.team_name ?? <em className="text-gray-400">TBD</em>}
-											</span>
-											<span className="text-xs text-gray-500 font-mono w-12 text-center shrink-0">
-												{m.table_number ?? "—"}
-											</span>
-											<button
-												onClick={() => handleDeleteMatch(m.id)}
-												className="p-1 text-gray-300 hover:text-red-500 transition-colors shrink-0"
-												title="Delete match"
-											>
-												<Trash2 size={13} />
-											</button>
+											</select>
 										</div>
-									))}
-								</div>
-							)}
-						</section>
+										<div className="space-y-1">
+											<label className="text-[10px] font-black uppercase tracking-widest">Team 2</label>
+											<select
+												value={newTeam2}
+												onChange={(e) => setNewTeam2(e.target.value)}
+												className="w-full border-2 border-editorial-ink px-2 py-2 text-sm bg-editorial-bg focus:outline-none focus:border-editorial-gold"
+											>
+												<option value="">Select team…</option>
+												{allTeams
+													.filter((t) => t.id !== newTeam1)
+													.map((t) => (
+														<option key={t.id} value={t.id}>{t.team_name}</option>
+													))}
+											</select>
+										</div>
+										<div className="space-y-1">
+											<label className="text-[10px] font-black uppercase tracking-widest">Table #</label>
+											<input
+												type="number"
+												min={1}
+												value={newTable}
+												onChange={(e) => setNewTable(e.target.value)}
+												placeholder="e.g. 1"
+												className="w-full border-2 border-editorial-ink px-2 py-2 text-sm bg-editorial-bg focus:outline-none focus:border-editorial-gold [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+											/>
+										</div>
+										<button
+											onClick={handleCreateMatch}
+											disabled={isCreating}
+											className="border-2 border-editorial-ink bg-editorial-gold text-editorial-ink px-4 py-2 text-xs font-black uppercase tracking-widest hover:bg-editorial-ink hover:text-white transition-colors disabled:opacity-50 flex items-center gap-1.5 whitespace-nowrap shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]"
+										>
+											<Plus size={13} />
+											{isCreating ? "Adding…" : "Add Match"}
+										</button>
+									</div>
 
-						{/* ② ADVANCE TO BRACKET ───────────────────────────────── */}
-						<section>
-							<SectionHeader
-								number="02"
+									{createError && (
+										<p className="text-xs text-red-600 flex items-center gap-1.5">
+											<AlertCircle size={12} /> {createError}
+										</p>
+									)}
+
+									<div className="pt-2 border-t border-gray-100 flex items-center justify-between gap-3 flex-wrap">
+										<p className="text-xs text-gray-400">
+											Pair all {allTeams.length} teams into {Math.floor(allTeams.length / 2)} matches automatically
+										</p>
+										<button
+											onClick={handleAutoGenerate}
+											disabled={allTeams.length < 2}
+											className="text-xs font-semibold text-gray-500 border border-gray-200 px-3 py-1.5 hover:border-editorial-ink hover:text-editorial-ink transition-colors disabled:opacity-40"
+										>
+											Auto-generate all matches
+										</button>
+									</div>
+								</div>
+							</CollapsiblePanel>
+
+							{/* Panel: Qualifier Matches */}
+							<CollapsiblePanel
+								title={`Qualifier Matches (${qualifierMatches.length})`}
+								open={matchListOpen}
+								onToggle={() => setMatchListOpen((v) => !v)}
+							>
+								{qualifierMatches.length === 0 ? (
+									<div className="p-6 text-center text-sm text-gray-400">
+										No matches yet. Add one above or use auto-generate.
+									</div>
+								) : (
+									<div>
+										<div className="bg-editorial-ink/5 px-3 py-1.5 flex items-center border-b border-gray-100">
+											<span className="text-[10px] font-black uppercase tracking-widest text-gray-400 flex-1">Teams</span>
+											<span className="text-[10px] font-black uppercase tracking-widest text-gray-400 w-12 text-center">Table</span>
+											<span className="w-8" />
+										</div>
+										{qualifierMatches.map((m, i) => (
+											<div key={m.id}
+												className={`flex items-center gap-3 px-3 py-2.5 border-b border-gray-100 text-sm last:border-b-0 ${
+													i % 2 === 0 ? "bg-white" : "bg-editorial-bg/30"
+												}`}
+											>
+												<span className="text-[10px] font-black text-gray-300 w-5 shrink-0">{i + 1}</span>
+												<span className="flex-1 font-semibold truncate">
+													{m.team_1?.team_name ?? <em className="text-gray-400">TBD</em>}
+												</span>
+												<span className="text-xs text-gray-300 shrink-0">vs</span>
+												<span className="flex-1 font-semibold truncate text-right">
+													{m.team_2?.team_name ?? <em className="text-gray-400">TBD</em>}
+												</span>
+												<span className="text-xs text-gray-400 font-mono w-12 text-center shrink-0">
+													{m.table_number ?? "—"}
+												</span>
+												<button
+													onClick={() => handleDeleteMatch(m.id)}
+													className="p-1 text-gray-300 hover:text-red-500 transition-colors shrink-0"
+													title="Delete match"
+												>
+													<Trash2 size={13} />
+												</button>
+											</div>
+										))}
+									</div>
+								)}
+							</CollapsiblePanel>
+
+							{/* Panel: Standings */}
+							<CollapsiblePanel
+								title={`Qualifier Standings (${standings.length} teams)`}
+								open={standingsOpen}
+								onToggle={() => setStandingsOpen((v) => !v)}
+							>
+								{standings.length === 0 ? (
+									<div className="p-6 text-center text-sm text-gray-400">
+										No qualifier scores yet. Scorekeepers can enter scores at /scorekeeper once matches are created.
+									</div>
+								) : (
+									<StandingsTable standings={standings} advanceCount={advanceCount} />
+								)}
+							</CollapsiblePanel>
+
+							{/* Panel: Advance to Bracket */}
+							<CollapsiblePanel
 								title="Advance to Bracket"
-								subtitle="Seeding is rank-based: top qualifier seed faces the lowest seed first to protect high performers"
-							/>
-
-							{bracketAlreadyExists ? (
-								<div className="border-2 border-editorial-green bg-editorial-green/5 p-4">
-									<p className="text-xs font-black text-editorial-green uppercase tracking-wider mb-1">
-										{targetPhase} already seeded
-									</p>
-									<p className="text-sm text-gray-600">
-										{elimByPhase[targetPhase].length} match(es) exist. Scroll down to manage the bracket.
-									</p>
-								</div>
-							) : (
-								<div className="border-2 border-editorial-ink bg-white p-5 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] space-y-5">
+								open={advancePanelOpen}
+								onToggle={() => setAdvancePanelOpen((v) => !v)}
+								accent={!bracketAlreadyExists}
+							>
+								<div className="p-5 space-y-5">
 									<div className="flex items-center gap-4 flex-wrap">
 										<span className="text-xs font-black uppercase tracking-widest">Advance top</span>
 										<div className="flex border-2 border-editorial-ink">
@@ -569,151 +632,292 @@ export function AdminPage() {
 										</span>
 									</div>
 
-									<div className="bg-editorial-ink/5 border-l-4 border-editorial-gold px-4 py-2 text-xs text-gray-600">
-										<strong className="font-black text-editorial-ink">Seeding:</strong>{" "}
-										Strictly rank-based — top qualifier seed faces the lowest seed first.{" "}
-										{advanceCount === 16
-											? "Order (1v16, 8v9, 4v13, 5v12, 2v15, 7v10, 3v14, 6v11) guarantees seeds 1 & 2 cannot meet before the Final."
-											: advanceCount === 8
-											? "Order (1v8, 4v5, 2v7, 3v6) guarantees seeds 1 & 2 cannot meet before the Final."
-											: "1v4, 2v3 — seeds 1 & 2 meet only in the Final."}
-									</div>
-
-									<button onClick={() => setShowSeedPreview((v) => !v)}
-										className="flex items-center gap-2 text-xs font-semibold text-gray-500 hover:text-editorial-ink transition-colors"
-									>
-										<ChevronRight size={14} className={`transition-transform ${showSeedPreview ? "rotate-90" : ""}`} />
-										{showSeedPreview ? "Hide" : "Show"} seeding preview
-									</button>
-
-									{showSeedPreview && (
-										<SeedPreview pairings={pairings} topTeams={topTeams} targetPhase={targetPhase} />
-									)}
-
-									{advanceError && (
-										<div className="flex items-start gap-2 bg-red-50 border border-red-200 p-3 text-xs text-red-700">
-											<AlertCircle size={13} className="mt-0.5 shrink-0" /> {advanceError}
+									{bracketAlreadyExists ? (
+										<div className="flex items-center justify-between gap-3 bg-editorial-green/8 border border-editorial-green/30 px-4 py-3">
+											<div>
+												<p className="text-xs font-black text-editorial-green uppercase tracking-wider">
+													{targetPhase} already seeded — {elimByPhase[targetPhase].length} match(es)
+												</p>
+											</div>
+											<button
+												onClick={() => setActiveTab("bracket")}
+												className="text-xs font-semibold text-editorial-green border border-editorial-green px-3 py-1.5 hover:bg-editorial-green hover:text-white transition-colors whitespace-nowrap shrink-0"
+											>
+												Go to Bracket →
+											</button>
 										</div>
-									)}
-									{advanceSuccess && (
-										<div className="bg-editorial-green/10 border border-editorial-green p-3 text-xs text-editorial-green font-semibold">
-											{advanceSuccess}
-										</div>
-									)}
+									) : (
+										<>
+											<div className="bg-editorial-ink/5 border-l-4 border-editorial-gold px-4 py-2 text-xs text-gray-600">
+												<strong className="font-black text-editorial-ink">Seeding:</strong>{" "}
+												{advanceCount === 16
+													? "1v16, 8v9, 4v13, 5v12, 2v15, 7v10, 3v14, 6v11 — seeds 1 & 2 cannot meet before the Final."
+													: advanceCount === 8
+													? "1v8, 4v5, 2v7, 3v6 — seeds 1 & 2 cannot meet before the Final."
+													: "1v4, 2v3 — seeds 1 & 2 meet only in the Final."}
+											</div>
 
-									<button
-										onClick={handleAdvanceTeams}
-										disabled={isAdvancing || standings.length < advanceCount}
-										className="border-2 border-editorial-ink bg-editorial-gold text-editorial-ink px-6 py-2.5 text-xs font-black uppercase tracking-widest hover:bg-editorial-ink hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-[3px_3px_0px_0px_rgba(26,26,26,1)]"
-									>
-										{isAdvancing ? "Seeding…" : `Advance ${advanceCount} Teams to ${targetPhase} →`}
-									</button>
+											<button onClick={() => setShowSeedPreview((v) => !v)}
+												className="flex items-center gap-2 text-xs font-semibold text-gray-500 hover:text-editorial-ink transition-colors"
+											>
+												<ChevronRight size={14} className={`transition-transform ${showSeedPreview ? "rotate-90" : ""}`} />
+												{showSeedPreview ? "Hide" : "Show"} seeding preview
+											</button>
 
-									{standings.length < advanceCount && standings.length > 0 && (
-										<p className="text-xs text-gray-400">
-											{standings.length} / {advanceCount} teams have scores. All qualifier scores must be entered first.
-										</p>
+											{showSeedPreview && (
+												<SeedPreview pairings={pairings} topTeams={topTeams} targetPhase={targetPhase} />
+											)}
+
+											{advanceError && (
+												<div className="flex items-start gap-2 bg-red-50 border border-red-200 p-3 text-xs text-red-700">
+													<AlertCircle size={13} className="mt-0.5 shrink-0" /> {advanceError}
+												</div>
+											)}
+											{advanceSuccess && (
+												<div className="bg-editorial-green/10 border border-editorial-green p-3 text-xs text-editorial-green font-semibold">
+													{advanceSuccess}
+												</div>
+											)}
+
+											<div className="flex items-center gap-3 flex-wrap">
+												<button
+													onClick={handleAdvanceTeams}
+													disabled={isAdvancing || standings.length < advanceCount}
+													className="border-2 border-editorial-ink bg-editorial-gold text-editorial-ink px-6 py-2.5 text-xs font-black uppercase tracking-widest hover:bg-editorial-ink hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-[3px_3px_0px_0px_rgba(26,26,26,1)]"
+												>
+													{isAdvancing ? "Seeding…" : `Advance ${advanceCount} Teams →`}
+												</button>
+												{standings.length < advanceCount && standings.length > 0 && (
+													<p className="text-xs text-gray-400">
+														{standings.length} / {advanceCount} teams scored
+													</p>
+												)}
+											</div>
+										</>
 									)}
 								</div>
+							</CollapsiblePanel>
+						</>
+					)}
+
+					{/* ─ BRACKET TAB ────────────────────────────────────────── */}
+					{activeTab === "bracket" && (
+						<>
+							{activeBracketPhases.length === 0 ? (
+								<div className="py-16 text-center space-y-3">
+									<p className="text-sm text-gray-400">No bracket matches yet.</p>
+									<button
+										onClick={() => setActiveTab("qualifiers")}
+										className="text-xs font-semibold text-editorial-ink border-2 border-editorial-ink px-4 py-2 hover:bg-editorial-gold transition-colors"
+									>
+										← Go to Qualifiers to advance teams
+									</button>
+								</div>
+							) : (
+								<>
+									{/* Bracket stats strip */}
+									<div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-gray-400 px-1 pb-1 flex-wrap">
+										<span>{activeBracketPhases.length} active phase{activeBracketPhases.length !== 1 ? "s" : ""}</span>
+										{pendingWinners > 0 && (
+											<>
+												<span className="text-gray-200">·</span>
+												<span className="text-amber-600">{pendingWinners} pending winner{pendingWinners !== 1 ? "s" : ""}</span>
+											</>
+										)}
+										{pendingWinners === 0 && (
+											<>
+												<span className="text-gray-200">·</span>
+												<span className="text-editorial-green">All confirmed ✓</span>
+											</>
+										)}
+									</div>
+
+									{/* Phase accordions (main phases except Third Place) */}
+									{ELIM_PHASES
+										.filter((p) => p !== "Third Place" && (elimByPhase[p]?.length ?? 0) > 0)
+										.map((phase) => (
+											<PhaseAccordion
+												key={phase}
+												phase={phase}
+												matches={elimByPhase[phase] ?? []}
+												thirdPlaceMatches={phase === "Semifinals" ? (elimByPhase["Third Place"] ?? []) : []}
+												overrideMatchId={overrideMatchId}
+												winnerConfirming={winnerConfirming}
+												lockType={phaseLocks[phase] ?? null}
+												onSetWinner={handleSetWinner}
+												onToggleOverride={setOverrideMatchId}
+												onAdvanceWinners={nextPhaseFor(phase) ? () => handleAdvanceWinners(phase) : undefined}
+												canAdvance={(elimByPhase[nextPhaseFor(phase)!]?.length ?? 0) === 0}
+												onLock={(lt) => handleLockPhase(phase, lt)}
+												onUnlock={() => handleUnlockPhase(phase)}
+											/>
+										))}
+
+									{/* Third Place standalone (only shown when Finals exists too) */}
+									{(elimByPhase["Third Place"]?.length ?? 0) > 0 &&
+										(elimByPhase["Finals"]?.length ?? 0) > 0 && (
+										<PhaseAccordion
+											key="Third Place"
+											phase="Third Place"
+											matches={elimByPhase["Third Place"] ?? []}
+											thirdPlaceMatches={[]}
+											overrideMatchId={overrideMatchId}
+											winnerConfirming={winnerConfirming}
+											lockType={phaseLocks["Third Place"] ?? null}
+											onSetWinner={handleSetWinner}
+											onToggleOverride={setOverrideMatchId}
+											onAdvanceWinners={undefined}
+											canAdvance={false}
+											onLock={(lt) => handleLockPhase("Third Place", lt)}
+											onUnlock={() => handleUnlockPhase("Third Place")}
+										/>
+									)}
+								</>
 							)}
-						</section>
+						</>
+					)}
+				</div>
+			)}
+		</div>
+	);
+}
 
-						{/* ③ QUALIFIER STANDINGS (collapsible) ───────────────── */}
-						<section>
-							<div className="flex items-start justify-between gap-4 flex-wrap mb-4">
-								<SectionHeader
-									number="03"
-									title="Qualifier Standings"
-									subtitle={`${standings.length} teams ranked · updates live as scores are entered`}
-								/>
-								<button
-									onClick={() => setStandingsOpen((v) => !v)}
-									className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-editorial-ink transition-colors border border-gray-200 px-3 py-1.5"
-									title={standingsOpen ? "Collapse standings" : "Expand standings"}
-								>
-									{standingsOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-									{standingsOpen ? "Collapse" : "Expand"}
-								</button>
-							</div>
+// ─── CollapsiblePanel ─────────────────────────────────────────────────────────
 
-							{standingsOpen && (
-								standings.length === 0 ? (
-									<EmptyState text="No qualifier scores yet. Scorekeepers can enter scores at /scorekeeper once matches are created above." />
-								) : (
-									<StandingsTable standings={standings} advanceCount={advanceCount} />
-								)
-							)}
-						</section>
+function CollapsiblePanel({
+	title,
+	open,
+	onToggle,
+	accent = false,
+	children,
+}: {
+	title: string;
+	open: boolean;
+	onToggle: () => void;
+	accent?: boolean;
+	children: React.ReactNode;
+}) {
+	const ref = useRef<HTMLDivElement>(null);
+	const [height, setHeight] = useState<number | "auto">("auto");
 
-						{/* ④ BRACKET PHASES ───────────────────────────────────── */}
-						{ELIM_PHASES
-							.filter((p) => p !== "Third Place" && (elimByPhase[p]?.length ?? 0) > 0)
-							.map((phase) => (
-								<BracketSection
-									key={phase}
-									phase={phase}
-									matches={elimByPhase[phase] ?? []}
-									thirdPlaceMatches={phase === "Semifinals" ? (elimByPhase["Third Place"] ?? []) : []}
-									overrideMatchId={overrideMatchId}
-									winnerConfirming={winnerConfirming}
-									lockType={phaseLocks[phase] ?? null}
-									onSetWinner={handleSetWinner}
-									onToggleOverride={setOverrideMatchId}
-									onAdvanceWinners={nextPhaseFor(phase) ? () => handleAdvanceWinners(phase) : undefined}
-									canAdvance={(elimByPhase[nextPhaseFor(phase)!]?.length ?? 0) === 0}
-									onLock={(lt) => handleLockPhase(phase, lt)}
-									onUnlock={() => handleUnlockPhase(phase)}
+	useEffect(() => {
+		if (ref.current) {
+			setHeight(open ? ref.current.scrollHeight : 0);
+		}
+	}, [open, children]);
+
+	return (
+		<div className={`border bg-white overflow-hidden ${accent ? "border-editorial-gold/60" : "border-gray-200"}`}>
+			<button
+				onClick={onToggle}
+				className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-editorial-ink/5 transition-colors"
+			>
+				{open ? <ChevronUp size={14} className="shrink-0 text-gray-400" /> : <ChevronDown size={14} className="shrink-0 text-gray-400" />}
+				<span className="text-xs font-black uppercase tracking-widest flex-1">{title}</span>
+			</button>
+			<div
+				style={{ height: typeof height === "number" ? `${height}px` : height, overflow: "hidden", transition: "height 200ms ease" }}
+			>
+				<div ref={ref} className="border-t border-gray-100">
+					{children}
+				</div>
+			</div>
+		</div>
+	);
+}
+
+// ─── PhaseAccordion ───────────────────────────────────────────────────────────
+
+function PhaseAccordion({
+	phase, matches, thirdPlaceMatches, overrideMatchId, winnerConfirming, lockType,
+	onSetWinner, onToggleOverride, onAdvanceWinners, canAdvance, onLock, onUnlock,
+}: {
+	phase: Phase;
+	matches: MatchWithTeams[];
+	thirdPlaceMatches: MatchWithTeams[];
+	overrideMatchId: string | null;
+	winnerConfirming: string | null;
+	lockType: string | null;
+	onSetWinner: (matchId: string, winnerId: string) => void;
+	onToggleOverride: (id: string | null) => void;
+	onAdvanceWinners?: () => void;
+	canAdvance: boolean;
+	onLock: (lt: "full" | "scores") => void;
+	onUnlock: () => void;
+}) {
+	const allConfirmed = matches.every((m) => m.winner_id);
+	const confirmedCount = matches.filter((m) => m.winner_id).length;
+	const [open, setOpen] = useState(!allConfirmed);
+
+	return (
+		<div className={`border-2 bg-white overflow-hidden ${allConfirmed ? "border-editorial-green/40" : "border-editorial-ink"}`}>
+			{/* Accordion header */}
+			<div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100">
+				<button
+					onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+					className="flex items-center gap-3 flex-1 text-left min-w-0"
+				>
+					{open ? <ChevronUp size={14} className="shrink-0 text-gray-400" /> : <ChevronDown size={14} className="shrink-0 text-gray-400" />}
+					<span className="text-xs font-black uppercase tracking-widest flex-1 truncate">{phase}</span>
+					<span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 shrink-0 ${
+						allConfirmed
+							? "bg-editorial-green/10 text-editorial-green border border-editorial-green/30"
+							: "bg-amber-50 text-amber-600 border border-amber-200"
+					}`}>
+						{allConfirmed ? `All confirmed` : `${confirmedCount}/${matches.length}`}
+					</span>
+				</button>
+
+				{/* Actions (stopPropagation to avoid toggle) */}
+				<div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+					<LockControl phase={phase} lockType={lockType} onLock={onLock} onUnlock={onUnlock} />
+					{onAdvanceWinners && canAdvance && (
+						<button
+							onClick={onAdvanceWinners}
+							disabled={!allConfirmed}
+							title={!allConfirmed ? "Confirm all winners first" : undefined}
+							className="border-2 border-editorial-ink px-3 py-1.5 text-[10px] font-black uppercase tracking-widest bg-white hover:bg-editorial-gold transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] whitespace-nowrap"
+						>
+							Advance → {nextPhaseFor(phase)}
+						</button>
+					)}
+				</div>
+			</div>
+
+			{/* Accordion body */}
+			{open && (
+				<div className="divide-y divide-gray-100">
+					{matches.map((m, i) => (
+						<MatchCard key={m.id} match={m} matchNumber={i + 1}
+							isOverriding={overrideMatchId === m.id}
+							isConfirming={winnerConfirming === m.id}
+							onSetWinner={onSetWinner}
+							onToggleOverride={onToggleOverride}
+						/>
+					))}
+
+					{thirdPlaceMatches.length > 0 && (
+						<div className="bg-gray-50 px-4 pt-3 pb-1">
+							<p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">
+								Third Place Match
+							</p>
+							{thirdPlaceMatches.map((m, i) => (
+								<MatchCard key={m.id} match={m} matchNumber={i + 1}
+									isOverriding={overrideMatchId === m.id}
+									isConfirming={winnerConfirming === m.id}
+									onSetWinner={onSetWinner}
+									onToggleOverride={onToggleOverride}
 								/>
 							))}
-
-						{/* Third Place standalone */}
-						{(elimByPhase["Third Place"]?.length ?? 0) > 0 &&
-							(elimByPhase["Finals"]?.length ?? 0) > 0 && (
-							<BracketSection
-								key="Third Place"
-								phase="Third Place"
-								matches={elimByPhase["Third Place"] ?? []}
-								thirdPlaceMatches={[]}
-								overrideMatchId={overrideMatchId}
-								winnerConfirming={winnerConfirming}
-								lockType={phaseLocks["Third Place"] ?? null}
-								onSetWinner={handleSetWinner}
-								onToggleOverride={setOverrideMatchId}
-								onAdvanceWinners={undefined}
-								canAdvance={false}
-								onLock={(lt) => handleLockPhase("Third Place", lt)}
-								onUnlock={() => handleUnlockPhase("Third Place")}
-							/>
-						)}
-					</>
-				)}
-			</div>
+						</div>
+					)}
+				</div>
+			)}
 		</div>
 	);
 }
 
-// ─── Shared sub-components ────────────────────────────────────────────────────
-
-function SectionHeader({ number, title, subtitle }: { number: string; title: string; subtitle: string }) {
-	return (
-		<div className="mb-0">
-			<div className="flex items-baseline gap-3 mb-1">
-				<span className="text-[10px] font-black text-editorial-gold tracking-widest">{number}</span>
-				<h2 className="text-xl font-black uppercase tracking-widest">{title}</h2>
-			</div>
-			<div className="w-10 h-0.5 bg-editorial-gold mb-1.5" />
-			<p className="text-xs text-gray-500">{subtitle}</p>
-		</div>
-	);
-}
-
-function EmptyState({ text }: { text: string }) {
-	return (
-		<div className="border-2 border-dashed border-gray-200 p-8 text-center text-sm text-gray-400">
-			{text}
-		</div>
-	);
-}
+// ─── LockControl ─────────────────────────────────────────────────────────────
 
 function LockControl({ phase, lockType, onLock, onUnlock }: {
 	phase: string;
@@ -737,7 +941,6 @@ function LockControl({ phase, lockType, onLock, onUnlock }: {
 				<button
 					onClick={onUnlock}
 					className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-editorial-ink transition-colors"
-					title="Unlock spectator view"
 				>
 					<Unlock size={10} /> Unlock
 				</button>
@@ -750,9 +953,8 @@ function LockControl({ phase, lockType, onLock, onUnlock }: {
 			<button
 				onClick={() => setOpen((v) => !v)}
 				className="flex items-center gap-1 text-[10px] font-semibold text-gray-400 border border-gray-200 px-2 py-1.5 hover:border-editorial-ink hover:text-editorial-ink transition-colors"
-				title={`Lock spectator view for ${phase}`}
 			>
-				<Lock size={10} /> Lock phase
+				<Lock size={10} /> Lock
 			</button>
 
 			{open && (
@@ -786,14 +988,16 @@ function LockControl({ phase, lockType, onLock, onUnlock }: {
 	);
 }
 
+// ─── StandingsTable ───────────────────────────────────────────────────────────
+
 function StandingsTable({ standings, advanceCount }: { standings: Standing[]; advanceCount: AdvanceCount }) {
 	return (
-		<div className="border-2 border-editorial-ink overflow-hidden">
+		<div className="overflow-hidden">
 			<div className="bg-editorial-ink text-white grid grid-cols-[28px_1fr_80px_88px_48px] px-3 py-2 text-[10px] font-black uppercase tracking-widest">
 				<span>#</span>
 				<span>Team</span>
 				<span className="text-right">Best Rnd</span>
-				<span className="text-right">Total (tie)</span>
+				<span className="text-right">Total</span>
 				<span className="text-center">Adv</span>
 			</div>
 
@@ -819,6 +1023,8 @@ function StandingsTable({ standings, advanceCount }: { standings: Standing[]; ad
 		</div>
 	);
 }
+
+// ─── SeedPreview ──────────────────────────────────────────────────────────────
 
 function SeedPreview({ pairings, topTeams, targetPhase }: {
 	pairings: [number, number][];
@@ -852,76 +1058,7 @@ function SeedPreview({ pairings, topTeams, targetPhase }: {
 	);
 }
 
-function BracketSection({ phase, matches, thirdPlaceMatches, overrideMatchId, winnerConfirming, lockType, onSetWinner, onToggleOverride, onAdvanceWinners, canAdvance, onLock, onUnlock }: {
-	phase: Phase;
-	matches: MatchWithTeams[];
-	thirdPlaceMatches: MatchWithTeams[];
-	overrideMatchId: string | null;
-	winnerConfirming: string | null;
-	lockType: string | null;
-	onSetWinner: (matchId: string, winnerId: string) => void;
-	onToggleOverride: (id: string | null) => void;
-	onAdvanceWinners?: () => void;
-	canAdvance: boolean;
-	onLock: (lt: "full" | "scores") => void;
-	onUnlock: () => void;
-}) {
-	const allConfirmed = matches.every((m) => m.winner_id);
-	const confirmedCount = matches.filter((m) => m.winner_id).length;
-	const phaseNumber = { "Pre-Quarterfinals": "04", "Quarterfinals": "05", "Semifinals": "06", "Finals": "07", "Third Place": "08" }[phase] ?? "—";
-
-	return (
-		<section>
-			<div className="flex items-start justify-between gap-4 flex-wrap mb-4">
-				<SectionHeader
-					number={phaseNumber}
-					title={phase}
-					subtitle={`${matches.length} match(es) · ${allConfirmed ? "All winners confirmed ✓" : `${confirmedCount}/${matches.length} confirmed`}`}
-				/>
-				<div className="flex items-center gap-3 flex-wrap">
-					<LockControl phase={phase} lockType={lockType} onLock={onLock} onUnlock={onUnlock} />
-					{onAdvanceWinners && canAdvance && (
-						<button
-							onClick={onAdvanceWinners}
-							disabled={!allConfirmed}
-							title={!allConfirmed ? "Confirm all winners first" : undefined}
-							className="border-2 border-editorial-ink px-4 py-2 text-xs font-black uppercase tracking-widest bg-white hover:bg-editorial-gold transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] whitespace-nowrap"
-						>
-							Advance Winners → {nextPhaseFor(phase)}
-						</button>
-					)}
-				</div>
-			</div>
-
-			<div className="space-y-2">
-				{matches.map((m, i) => (
-					<MatchCard key={m.id} match={m} matchNumber={i + 1}
-						isOverriding={overrideMatchId === m.id}
-						isConfirming={winnerConfirming === m.id}
-						onSetWinner={onSetWinner}
-						onToggleOverride={onToggleOverride}
-					/>
-				))}
-			</div>
-
-			{thirdPlaceMatches.length > 0 && (
-				<div className="mt-6 pt-6 border-t border-gray-100">
-					<p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-3">
-						Third Place Match
-					</p>
-					{thirdPlaceMatches.map((m, i) => (
-						<MatchCard key={m.id} match={m} matchNumber={i + 1}
-							isOverriding={overrideMatchId === m.id}
-							isConfirming={winnerConfirming === m.id}
-							onSetWinner={onSetWinner}
-							onToggleOverride={onToggleOverride}
-						/>
-					))}
-				</div>
-			)}
-		</section>
-	);
-}
+// ─── MatchCard ────────────────────────────────────────────────────────────────
 
 function MatchCard({ match, matchNumber, isOverriding, isConfirming, onSetWinner, onToggleOverride }: {
 	match: MatchWithTeams;
@@ -939,26 +1076,26 @@ function MatchCard({ match, matchNumber, isOverriding, isConfirming, onSetWinner
 	const showPicker = !hasWinner || isOverriding;
 
 	return (
-		<div className={`border-2 p-4 transition-colors ${hasWinner ? "border-editorial-green bg-editorial-green/5" : "border-editorial-ink bg-white"}`}>
+		<div className={`px-4 py-3 transition-colors ${hasWinner ? "bg-editorial-green/5" : "bg-white"}`}>
 			<div className="flex items-center gap-3 flex-wrap">
-				<span className="text-[10px] font-black text-gray-400 w-14 shrink-0 uppercase tracking-wide">
-					Match {matchNumber}
+				<span className="text-[10px] font-black text-gray-300 w-10 shrink-0 uppercase tracking-wide">
+					M{matchNumber}
 					{match.table_number !== null && (
-						<span className="block text-gray-300">Tbl {match.table_number}</span>
+						<span className="block text-gray-200">T{match.table_number}</span>
 					)}
 				</span>
 
-				<span className={`flex-1 min-w-25 text-sm font-semibold ${t1Score > t2Score && t1Score > 0 ? "text-editorial-green" : ""}`}>
+				<span className={`flex-1 min-w-[6rem] text-sm font-semibold truncate ${t1Score > t2Score && t1Score > 0 ? "text-editorial-green" : ""}`}>
 					{match.team_1?.team_name ?? <span className="text-gray-300 italic">TBD</span>}
 				</span>
 
 				<div className="flex items-center gap-2 shrink-0">
-					<span className={`text-xl font-black font-mono w-12 text-right ${t1Score > t2Score ? "text-editorial-green" : "text-editorial-ink"}`}>{t1Score}</span>
-					<span className="text-gray-300 font-bold text-xs">vs</span>
-					<span className={`text-xl font-black font-mono w-12 ${t2Score > t1Score ? "text-editorial-green" : "text-editorial-ink"}`}>{t2Score}</span>
+					<span className={`text-lg font-black font-mono w-10 text-right ${t1Score > t2Score ? "text-editorial-green" : "text-editorial-ink"}`}>{t1Score}</span>
+					<span className="text-gray-200 font-bold text-xs">vs</span>
+					<span className={`text-lg font-black font-mono w-10 ${t2Score > t1Score ? "text-editorial-green" : "text-editorial-ink"}`}>{t2Score}</span>
 				</div>
 
-				<span className={`flex-1 min-w-25 text-sm font-semibold text-right ${t2Score > t1Score && t2Score > 0 ? "text-editorial-green" : ""}`}>
+				<span className={`flex-1 min-w-[6rem] text-sm font-semibold text-right truncate ${t2Score > t1Score && t2Score > 0 ? "text-editorial-green" : ""}`}>
 					{match.team_2?.team_name ?? <span className="text-gray-300 italic">TBD</span>}
 				</span>
 
@@ -967,7 +1104,7 @@ function MatchCard({ match, matchNumber, isOverriding, isConfirming, onSetWinner
 						<>
 							<span className="text-xs font-black text-editorial-green">✓ {match.winner?.team_name}</span>
 							<button onClick={() => onToggleOverride(match.id)} className="text-[10px] text-gray-400 underline hover:text-editorial-ink">
-								Override
+								Edit
 							</button>
 						</>
 					)}
@@ -975,9 +1112,9 @@ function MatchCard({ match, matchNumber, isOverriding, isConfirming, onSetWinner
 			</div>
 
 			{showPicker && (
-				<div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-3 flex-wrap">
+				<div className="mt-2.5 pt-2.5 border-t border-gray-100 flex items-center gap-3 flex-wrap">
 					<span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-						{isOverriding ? "Override winner:" : "Confirm winner:"}
+						{isOverriding ? "Override:" : "Winner:"}
 					</span>
 
 					{([
@@ -988,10 +1125,10 @@ function MatchCard({ match, matchNumber, isOverriding, isConfirming, onSetWinner
 						const suggested = id === suggestedId;
 						return (
 							<button key={id} onClick={() => onSetWinner(match.id, id)} disabled={isConfirming}
-								className={`px-4 py-2 border-2 text-xs font-black uppercase tracking-widest transition-colors disabled:opacity-50 ${
+								className={`px-3 py-1.5 border-2 text-xs font-black uppercase tracking-widest transition-colors disabled:opacity-50 ${
 									suggested
 										? "border-editorial-gold bg-editorial-gold/10 hover:bg-editorial-gold"
-										: "border-gray-300 text-gray-600 hover:border-editorial-ink hover:text-editorial-ink"
+										: "border-gray-200 text-gray-600 hover:border-editorial-ink hover:text-editorial-ink"
 								}`}
 							>
 								{suggested ? "★ " : ""}{team.team_name} <span className="font-mono">({score})</span>

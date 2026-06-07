@@ -1,4 +1,4 @@
-import { CloudOff, Loader2, LogOut, RefreshCw, Wifi } from "lucide-react";
+import { CloudOff, Lock, Loader2, LogOut, RefreshCw, Wifi } from "lucide-react";
 import { CustomSelect } from "../components/CustomSelect";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -171,6 +171,38 @@ export function ScorekeeperPage() {
 	const [elimActiveRounds, setElimActiveRounds] = useState(1);
 
 	const { isOnline, pendingCount, isFlushing, enqueue } = useOfflineQueue(loadMatches);
+
+	// ── Lock state ────────────────────────────────────────────────────────────
+
+	const [isLocked, setIsLocked] = useState<boolean>(
+		() => profile?.locked ?? false,
+	);
+
+	// Sync initial lock state when profile loads
+	useEffect(() => {
+		if (profile) setIsLocked(profile.locked ?? false);
+	}, [profile?.id]);
+
+	// Realtime: push lock changes instantly without needing a page refresh
+	useEffect(() => {
+		if (!profile?.id) return;
+		const channel = supabase
+			.channel(`lock-${profile.id}`)
+			.on(
+				"postgres_changes",
+				{
+					event: "UPDATE",
+					schema: "public",
+					table: "user_profiles",
+					filter: `id=eq.${profile.id}`,
+				},
+				(payload) => {
+					setIsLocked((payload.new as { locked: boolean }).locked ?? false);
+				},
+			)
+			.subscribe();
+		return () => { supabase.removeChannel(channel); };
+	}, [profile?.id]);
 
 	const isQualifiers = phase === "Qualifiers";
 
@@ -399,6 +431,30 @@ export function ScorekeeperPage() {
 	}
 
 	// ── Render ────────────────────────────────────────────────────────────────
+
+	// ── Lock overlay ──────────────────────────────────────────────────────────
+	if (isLocked) {
+		return (
+			<div className="fixed inset-0 z-50 bg-editorial-ink flex flex-col items-center justify-center text-white px-6 text-center">
+				<div className="border-4 border-editorial-gold p-6 mb-8">
+					<Lock size={40} className="text-editorial-gold mx-auto" />
+				</div>
+				<h1 className="text-xl font-black uppercase tracking-widest mb-3">
+					Access Suspended
+				</h1>
+				<p className="text-white/50 text-sm max-w-xs leading-relaxed">
+					Your scorekeeper access has been temporarily suspended by
+					the tournament administrator. Please reach out to them to
+					regain access.
+				</p>
+				{profile?.email && (
+					<p className="text-white/25 text-xs mt-8 font-mono">
+						{profile.email}
+					</p>
+				)}
+			</div>
+		);
+	}
 
 	return (
 		<div className="min-h-screen bg-editorial-bg text-editorial-ink font-sans">

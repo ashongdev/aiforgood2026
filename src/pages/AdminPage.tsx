@@ -2846,12 +2846,13 @@ function ScoreekeepersTab() {
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [editTable, setEditTable] = useState("");
 	const [isSavingEdit, setIsSavingEdit] = useState(false);
+	const [lockingId, setLockingId] = useState<string | null>(null);
 
 	async function loadScorekeepers() {
 		setIsLoading(true);
 		const { data } = await supabase
 			.from("user_profiles")
-			.select("id, email, table_number, created_at, role")
+			.select("id, email, table_number, created_at, role, locked")
 			.eq("role", "scorekeeper")
 			.order("created_at", { ascending: false });
 		setScorekeepers((data as ScorekeeperProfile[]) ?? []);
@@ -2919,6 +2920,16 @@ function ScoreekeepersTab() {
 		});
 		setEditingId(null);
 		setIsSavingEdit(false);
+		await loadScorekeepers();
+	}
+
+	async function handleToggleLock(userId: string, currentlyLocked: boolean) {
+		setLockingId(userId);
+		await supabase
+			.from("user_profiles")
+			.update({ locked: !currentlyLocked })
+			.eq("id", userId);
+		setLockingId(null);
 		await loadScorekeepers();
 	}
 
@@ -3102,13 +3113,26 @@ function ScoreekeepersTab() {
 						</thead>
 						<tbody className="divide-y divide-gray-100">
 							{scorekeepers.map((sk) => (
-								<tr key={sk.id} className="hover:bg-gray-50/60">
-									<td className="px-4 py-2.5 text-editorial-ink font-medium">
-										{sk.email ?? (
-											<span className="text-gray-300 italic text-xs">
-												no email
+								<tr
+									key={sk.id}
+									className={`hover:bg-gray-50/60 ${sk.locked ? "bg-red-50/40" : ""}`}
+								>
+									<td className="px-4 py-2.5">
+										<div className="flex items-center gap-2 min-w-0">
+											{sk.locked && (
+												<span className="shrink-0 flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-red-600 border border-red-200 bg-red-50 px-1.5 py-0.5">
+													<Lock size={9} />
+													Locked
+												</span>
+											)}
+											<span className={`font-medium truncate ${sk.locked ? "text-gray-400" : "text-editorial-ink"}`}>
+												{sk.email ?? (
+													<span className="text-gray-300 italic text-xs">
+														no email
+													</span>
+												)}
 											</span>
-										)}
+										</div>
 									</td>
 									<td className="px-4 py-2.5">
 										{editingId === sk.id ? (
@@ -3170,6 +3194,37 @@ function ScoreekeepersTab() {
 									</td>
 									<td className="px-4 py-2.5">
 										<div className="flex items-center gap-0.5 justify-end">
+											{/* Lock / Unlock toggle */}
+											<button
+												onClick={() =>
+													handleToggleLock(
+														sk.id,
+														sk.locked,
+													)
+												}
+												disabled={lockingId === sk.id}
+												title={
+													sk.locked
+														? "Unlock scorekeeper"
+														: "Lock scorekeeper"
+												}
+												className={`p-1.5 transition-colors disabled:opacity-40 ${
+													sk.locked
+														? "text-red-500 hover:text-editorial-ink"
+														: "text-gray-400 hover:text-red-500"
+												}`}
+											>
+												{lockingId === sk.id ? (
+													<Loader2
+														size={13}
+														className="animate-spin"
+													/>
+												) : sk.locked ? (
+													<Unlock size={13} />
+												) : (
+													<Lock size={13} />
+												)}
+											</button>
 											{editingId !== sk.id && (
 												<button
 													onClick={() => {

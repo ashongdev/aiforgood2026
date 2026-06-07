@@ -13,6 +13,7 @@ export interface UserProfile {
   role: Role
   table_number: number | null
   email: string | null
+  locked: boolean
   created_at: string
 }
 
@@ -21,6 +22,7 @@ export interface ScorekeeperProfile {
   role: 'scorekeeper'
   table_number: number | null
   email: string | null
+  locked: boolean
   created_at: string
 }
 

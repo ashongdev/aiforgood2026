@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight, Lock } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import ReactGA from "react-ga4";
+import { teamLogos } from "../lib/teamLogos";
 import { AnimatedScore } from "./AnimatedScore";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -40,53 +41,6 @@ function AnimatedPanel({ isOpen, children }: { isOpen: boolean; children: React.
 		</div>
 	);
 }
-
-// ─── Team logo map ─────────────────────────────────────────────────────────────
-
-const teamLogos: Record<string, string> = {
-	// Senior
-	Nanovolts: "/logos/Senior/Nanovolts.svg",
-	"Ai Squad": "/logos/Senior/Ai Squad.svg",
-	Masterminds: "/logos/Senior/Masterminds.svg",
-	"Aris Eagles Senior": "/logos/Senior/Aris Eagles Senior.svg",
-	"Redeemer Tech": "/logos/Senior/Redeemer Tech.svg",
-	"Stemr Seniors": "/logos/Senior/Stemr Seniors.svg",
-	Rookies: "/logos/Senior/Rookies.svg",
-	Createch: "/logos/Senior/Create T.svg",
-	"Team Applied": "/logos/Senior/Team Applied.svg",
-	"Fusion Innovators": "/logos/Senior/Fusion Innovators.svg",
-	"Beta Gold-St": "/logos/Senior/Beta Gold-St.svg",
-	Klone: "/logos/Senior/Klone.svg",
-	"Kepler-Robot": "/logos/Senior/Kepler-Robot.svg",
-	Ycem: "/logos/Senior/Ycem.svg",
-	"Ahtoo Alpha Gold St": "/logos/Senior/Ahtoo Alpha Gold St.svg",
-	Novex: "/logos/Senior/Novex.svg",
-	// Junior
-	"ARIS Eagles Junior": "/logos/Junior/Aris Eagles Junior.svg",
-	"Beta Gold-Jr": "/logos/Junior/BetavGold.svg",
-	Bytebots: "/logos/Junior/Byetbots.svg",
-	Mechminds: "/logos/Junior/Mechminds.svg",
-	Varified: "/logos/Junior/Varified'.svg",
-	"Redeemer Builders": "/logos/Junior/Redeemer.svg",
-	"Redeemer Innovators": "/logos/Junior/Redeemer Innovatios.svg",
-	"Grace Worriors": "/logos/Junior/GraceWarriors.svg",
-	Nexgen: "/logos/Junior/NEXGEn.svg",
-	"Bweh Trailblazers": "/logos/Junior/Bweh!.svg",
-	"Tech-Titans": "/logos/Junior/Tech Titans.svg",
-	"Legacy AI": "/logos/Junior/Legacy.svg",
-	Glocity: "/logos/Junior/Glocity.svg",
-	"Kinderkids Dream Builders": "/logos/Junior/Dreambuiold.svg",
-	"STEMT Juniors": "/logos/Junior/Stemr Seniors.svg",
-	"J2W Robotics Team": "/logos/Junior/J2.svg",
-	"Kinderkids Robostars": "/logos/Junior/Kinderkids.svg",
-	"Ahtoo Alpha Gold JT": "/logos/Junior/Ahtoo.svg",
-	"Beta Gold-JT": "/logos/Junior/BetavGold.svg",
-	"WIOSO Intellectuals": "/logos/Junior/WIOSS.svg",
-	"Global Eagles": "/logos/Junior/Eagles.svg",
-	"Guardian Lions": "/logos/Junior/Lions.svg",
-	"Pro-Lego-Codex": "/logos/Junior/Pro Lego.svg",
-	"The Queens": "/logos/Junior/Queens.svg",
-};
 
 // ─── Component ────────────────────────────────────────────────────────────────
 

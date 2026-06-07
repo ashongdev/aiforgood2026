@@ -121,17 +121,22 @@ function ScoreCell({
 
 	return (
 		<input
-			type="number"
-			min={0}
+			type="text"
 			inputMode="numeric"
 			data-row={rowIndex}
 			data-col={colIndex}
 			value={displayValue}
 			placeholder="—"
-			onChange={(e) => onChange(matchId, col, e.target.value)}
+			onChange={(e) => {
+				const val = e.target.value;
+				// Allow empty, a lone minus, or a valid integer (positive or negative)
+				if (/^-?\d*$/.test(val)) {
+					onChange(matchId, col, val);
+				}
+			}}
 			onBlur={(e) => onCommit(matchId, col, e.target.value)}
 			onKeyDown={handleKeyDown}
-			className="w-full h-full min-w-[52px] bg-transparent text-center text-sm font-mono font-semibold text-editorial-ink focus:outline-none focus:bg-editorial-gold/10 placeholder:text-gray-300 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+			className="w-full h-full min-w-[52px] bg-transparent text-center text-sm font-mono font-semibold text-editorial-ink focus:outline-none focus:bg-editorial-gold/15 focus:shadow-[inset_0_0_0_2px_#d4af37] placeholder:text-gray-300"
 		/>
 	);
 }
@@ -693,7 +698,7 @@ function QualifiersGrid({
 							).map((col, colOffset) => (
 								<td
 									key={col}
-									className="px-0 py-0 border-l border-gray-100"
+									className="px-0 py-0 h-px border-l border-gray-100 hover:bg-editorial-gold/20 transition-colors"
 								>
 									<ScoreCell
 										matchId={match.id}
@@ -750,7 +755,7 @@ function QualifiersGrid({
 							).map((col, colOffset) => (
 								<td
 									key={col}
-									className="px-0 py-0 border-l border-gray-100"
+									className="px-0 py-0 h-px border-l border-gray-100 hover:bg-editorial-gold/20 transition-colors"
 								>
 									<ScoreCell
 										matchId={match.id}
@@ -972,7 +977,7 @@ function EliminationGrid({
 							{T1_COLS.map((col, colOffset) => (
 								<td
 									key={col}
-									className="px-0 py-0 border-l border-gray-100"
+									className="px-0 py-0 h-px border-l border-gray-100 hover:bg-editorial-gold/20 transition-colors"
 								>
 									<ScoreCell
 										matchId={match.id}
@@ -1017,7 +1022,7 @@ function EliminationGrid({
 							{T2_COLS.map((col, colOffset) => (
 								<td
 									key={col}
-									className="px-0 py-0 border-l border-gray-100"
+									className="px-0 py-0 h-px border-l border-gray-100 hover:bg-editorial-gold/20 transition-colors"
 								>
 									<ScoreCell
 										matchId={match.id}

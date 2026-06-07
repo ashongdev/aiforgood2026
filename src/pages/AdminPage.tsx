@@ -15,7 +15,7 @@ import {
 	Users,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useEdgeColumnResize } from "../hooks/useEdgeColumnResize";
 import type {
@@ -262,11 +262,44 @@ function computeStandings(matches: MatchWithTeams[]): Standing[] {
 export function AdminPage() {
 	const { signOut } = useAuth();
 	const navigate = useNavigate();
+	const [searchParams, setSearchParams] = useSearchParams();
 
-	const [category, setCategory] = useState<Category>("Junior");
+	const [category, setCategory] = useState<Category>(() => {
+		const c = searchParams.get("category");
+		return c === "Senior" ? "Senior" : "Junior";
+	});
 	const [activeTab, setActiveTab] = useState<
 		"qualifiers" | "bracket" | "teams"
-	>("qualifiers");
+	>(() => {
+		const t = searchParams.get("tab");
+		return (["qualifiers", "bracket", "teams"] as const).includes(
+			t as never,
+		)
+			? (t as "qualifiers" | "bracket" | "teams")
+			: "qualifiers";
+	});
+
+	function changeTab(tab: "qualifiers" | "bracket" | "teams") {
+		setActiveTab(tab);
+		setSearchParams(
+			(prev) => {
+				prev.set("tab", tab);
+				return prev;
+			},
+			{ replace: true },
+		);
+	}
+
+	function changeCategory(cat: Category) {
+		setCategory(cat);
+		setSearchParams(
+			(prev) => {
+				prev.set("category", cat);
+				return prev;
+			},
+			{ replace: true },
+		);
+	}
 
 	// Data
 	const [allTeams, setAllTeams] = useState<Team[]>([]);
@@ -300,15 +333,15 @@ export function AdminPage() {
 	const [addMatchOpen, setAddMatchOpen] = useState(false);
 	const [matchListOpen, setMatchListOpen] = useState(false);
 	const [standingsOpen, setStandingsOpen] = useState(false);
-	const [advancePanelOpen, setAdvancePanelOpen] = useState(false);
+	const [advancePanelOpen, setAdvancePanelOpen] = useState(true);
 
 	// Phase locks (keyed by phase string, value = lock_type)
 	const [phaseLocks, setPhaseLocks] = useState<Record<string, string>>({});
 
 	// ── Data loading ────────────────────────────────────────────────────────────
 
-	async function loadData() {
-		setIsLoading(true);
+	async function loadData(silent = false) {
+		if (!silent) setIsLoading(true);
 		setAdvanceError(null);
 		setAdvanceSuccess(null);
 
@@ -368,7 +401,7 @@ export function AdminPage() {
 				"postgres_changes",
 				{ event: "*", schema: "public", table: "matches" },
 				() => {
-					loadData();
+					loadData(true);
 				},
 			)
 			.subscribe();
@@ -534,7 +567,7 @@ export function AdminPage() {
 			);
 			setShowSeedPreview(false);
 			loadData();
-			setActiveTab("bracket");
+			changeTab("bracket");
 		}
 	}
 
@@ -634,7 +667,7 @@ export function AdminPage() {
 						{(["Junior", "Senior"] as Category[]).map((c) => (
 							<button
 								key={c}
-								onClick={() => setCategory(c)}
+								onClick={() => changeCategory(c)}
 								className={`px-4 py-1.5 text-xs font-black uppercase tracking-widest transition-colors ${
 									category === c
 										? "bg-editorial-gold text-editorial-ink"
@@ -647,7 +680,7 @@ export function AdminPage() {
 					</div>
 
 					<button
-						onClick={loadData}
+						onClick={() => loadData()}
 						className="p-1.5 hover:text-editorial-gold transition-colors"
 						title="Refresh"
 					>
@@ -682,7 +715,7 @@ export function AdminPage() {
 				{/* Tab bar */}
 				<div className="bg-editorial-ink border-b-4 border-editorial-gold flex">
 					<button
-						onClick={() => setActiveTab("qualifiers")}
+						onClick={() => changeTab("qualifiers")}
 						className={`px-5 py-2.5 text-xs font-black uppercase tracking-widest transition-colors border-r border-white/10 ${
 							activeTab === "qualifiers"
 								? "bg-editorial-gold text-editorial-ink"
@@ -692,7 +725,7 @@ export function AdminPage() {
 						Qualifiers
 					</button>
 					<button
-						onClick={() => setActiveTab("bracket")}
+						onClick={() => changeTab("bracket")}
 						className={`relative px-5 py-2.5 text-xs font-black uppercase tracking-widest transition-colors ${
 							activeTab === "bracket"
 								? "bg-editorial-gold text-editorial-ink"
@@ -707,7 +740,7 @@ export function AdminPage() {
 						)}
 					</button>
 					<button
-						onClick={() => setActiveTab("teams")}
+						onClick={() => changeTab("teams")}
 						className={`flex items-center gap-1.5 px-5 py-2.5 text-xs font-black uppercase tracking-widest transition-colors border-l border-white/10 ${
 							activeTab === "teams"
 								? "bg-editorial-gold text-editorial-ink"
@@ -728,6 +761,38 @@ export function AdminPage() {
 					{/* ─ QUALIFIERS TAB ─────────────────────────────────────── */}
 					{activeTab === "qualifiers" && (
 						<>
+							{/* Start Tournament CTA — shown only before any matches exist */}
+							{qualifierMatches.length === 0 &&
+								allTeams.length > 0 && (
+									<div className="border-2 border-editorial-gold bg-editorial-gold/5 p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-[4px_4px_0px_0px_rgba(212,175,55,0.5)]">
+										<div>
+											<p className="text-xs font-black uppercase tracking-widest text-editorial-gold mb-1">
+												Ready to begin?
+											</p>
+											<h3 className="text-xl font-black uppercase tracking-widest text-editorial-ink">
+												Start the Tournament
+											</h3>
+											<p className="text-sm text-gray-500 mt-1">
+												{allTeams.length} {category}{" "}
+												team
+												{allTeams.length !== 1
+													? "s"
+													: ""}{" "}
+												registered. Auto-generate all
+												qualifier matches to kick things
+												off.
+											</p>
+										</div>
+										<button
+											onClick={handleAutoGenerate}
+											disabled={allTeams.length < 2}
+											className="shrink-0 border-2 border-editorial-ink bg-editorial-ink text-white px-8 py-3 text-sm font-black uppercase tracking-widest hover:bg-editorial-gold hover:text-editorial-ink transition-colors disabled:opacity-40 shadow-[3px_3px_0px_0px_rgba(26,26,26,1)] whitespace-nowrap"
+										>
+											Start Tournament →
+										</button>
+									</div>
+								)}
+
 							{/* Stats strip */}
 							<div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-gray-400 px-1 pb-1 flex-wrap">
 								<span>{qualifierMatches.length} matches</span>
@@ -739,9 +804,7 @@ export function AdminPage() {
 									<>
 										<span className="text-gray-200">·</span>
 										<button
-											onClick={() =>
-												setActiveTab("bracket")
-											}
+											onClick={() => changeTab("bracket")}
 											className="text-editorial-gold hover:underline"
 										>
 											Bracket → {targetPhase}
@@ -763,6 +826,151 @@ export function AdminPage() {
 									/>
 								</div>
 							</div>
+
+							{/* Panel: Advance to Bracket */}
+							<CollapsiblePanel
+								title="Advance to Bracket"
+								open={advancePanelOpen}
+								onToggle={() => setAdvancePanelOpen((v) => !v)}
+								accent={!bracketAlreadyExists}
+							>
+								<div className="p-5 space-y-5">
+									<div className="flex items-center gap-4 flex-wrap">
+										<span className="text-xs font-black uppercase tracking-widest">
+											Advance top
+										</span>
+										<div className="flex border-2 border-editorial-ink">
+											{ADVANCE_OPTIONS.map((n) => (
+												<button
+													key={n}
+													onClick={() => {
+														setAdvanceCount(n);
+														setShowSeedPreview(
+															false,
+														);
+													}}
+													className={`px-5 py-2 text-sm font-black transition-colors ${
+														advanceCount === n
+															? "bg-editorial-ink text-white"
+															: "bg-white text-editorial-ink hover:bg-editorial-gold/20"
+													}`}
+												>
+													{n}
+												</button>
+											))}
+										</div>
+										<span className="text-xs font-black uppercase tracking-widest">
+											teams →{" "}
+											<span className="text-editorial-gold">
+												{targetPhase}
+											</span>
+										</span>
+									</div>
+
+									{bracketAlreadyExists ? (
+										<div className="flex items-center justify-between gap-3 bg-editorial-green/8 border border-editorial-green/30 px-4 py-3">
+											<div>
+												<p className="text-xs font-black text-editorial-green uppercase tracking-wider">
+													{targetPhase} already seeded
+													—{" "}
+													{
+														elimByPhase[targetPhase]
+															.length
+													}{" "}
+													match(es)
+												</p>
+											</div>
+											<button
+												onClick={() =>
+													changeTab("bracket")
+												}
+												className="text-xs font-semibold text-editorial-green border border-editorial-green px-3 py-1.5 hover:bg-editorial-green hover:text-white transition-colors whitespace-nowrap shrink-0"
+											>
+												Go to Bracket →
+											</button>
+										</div>
+									) : (
+										<>
+											<div className="bg-editorial-ink/5 border-l-4 border-editorial-gold px-4 py-2 text-xs text-gray-600">
+												<strong className="font-black text-editorial-ink">
+													Seeding:
+												</strong>{" "}
+												{advanceCount === 16
+													? "1v16, 8v9, 4v13, 5v12, 2v15, 7v10, 3v14, 6v11 — seeds 1 & 2 cannot meet before the Final."
+													: advanceCount === 8
+														? "1v8, 4v5, 2v7, 3v6 — seeds 1 & 2 cannot meet before the Final."
+														: "1v4, 2v3 — seeds 1 & 2 meet only in the Final."}
+											</div>
+
+											<button
+												onClick={() =>
+													setShowSeedPreview(
+														(v) => !v,
+													)
+												}
+												className="flex items-center gap-2 text-xs font-semibold text-gray-500 hover:text-editorial-ink transition-colors"
+											>
+												<ChevronRight
+													size={14}
+													className={`transition-transform ${showSeedPreview ? "rotate-90" : ""}`}
+												/>
+												{showSeedPreview
+													? "Hide"
+													: "Show"}{" "}
+												seeding preview
+											</button>
+
+											{showSeedPreview && (
+												<SeedPreview
+													pairings={pairings}
+													topTeams={topTeams}
+													targetPhase={targetPhase}
+												/>
+											)}
+
+											{advanceError && (
+												<div className="flex items-start gap-2 bg-red-50 border border-red-200 p-3 text-xs text-red-700">
+													<AlertCircle
+														size={13}
+														className="mt-0.5 shrink-0"
+													/>{" "}
+													{advanceError}
+												</div>
+											)}
+											{advanceSuccess && (
+												<div className="bg-editorial-green/10 border border-editorial-green p-3 text-xs text-editorial-green font-semibold">
+													{advanceSuccess}
+												</div>
+											)}
+
+											<div className="flex items-center gap-3 flex-wrap">
+												<button
+													onClick={handleAdvanceTeams}
+													disabled={
+														isAdvancing ||
+														standings.length <
+															advanceCount
+													}
+													className="border-2 border-editorial-ink bg-editorial-gold text-editorial-ink px-6 py-2.5 text-xs font-black uppercase tracking-widest hover:bg-editorial-ink hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-[3px_3px_0px_0px_rgba(26,26,26,1)]"
+												>
+													{isAdvancing
+														? "Seeding…"
+														: `Advance ${advanceCount} Teams →`}
+												</button>
+												{standings.length <
+													advanceCount &&
+													standings.length > 0 && (
+														<p className="text-xs text-gray-400">
+															{standings.length} /{" "}
+															{advanceCount} teams
+															scored
+														</p>
+													)}
+											</div>
+										</>
+									)}
+								</div>
+							</CollapsiblePanel>
 
 							{/* Panel: Add Match */}
 							<CollapsiblePanel
@@ -965,151 +1173,6 @@ export function AdminPage() {
 									/>
 								)}
 							</CollapsiblePanel>
-
-							{/* Panel: Advance to Bracket */}
-							<CollapsiblePanel
-								title="Advance to Bracket"
-								open={advancePanelOpen}
-								onToggle={() => setAdvancePanelOpen((v) => !v)}
-								accent={!bracketAlreadyExists}
-							>
-								<div className="p-5 space-y-5">
-									<div className="flex items-center gap-4 flex-wrap">
-										<span className="text-xs font-black uppercase tracking-widest">
-											Advance top
-										</span>
-										<div className="flex border-2 border-editorial-ink">
-											{ADVANCE_OPTIONS.map((n) => (
-												<button
-													key={n}
-													onClick={() => {
-														setAdvanceCount(n);
-														setShowSeedPreview(
-															false,
-														);
-													}}
-													className={`px-5 py-2 text-sm font-black transition-colors ${
-														advanceCount === n
-															? "bg-editorial-ink text-white"
-															: "bg-white text-editorial-ink hover:bg-editorial-gold/20"
-													}`}
-												>
-													{n}
-												</button>
-											))}
-										</div>
-										<span className="text-xs font-black uppercase tracking-widest">
-											teams →{" "}
-											<span className="text-editorial-gold">
-												{targetPhase}
-											</span>
-										</span>
-									</div>
-
-									{bracketAlreadyExists ? (
-										<div className="flex items-center justify-between gap-3 bg-editorial-green/8 border border-editorial-green/30 px-4 py-3">
-											<div>
-												<p className="text-xs font-black text-editorial-green uppercase tracking-wider">
-													{targetPhase} already seeded
-													—{" "}
-													{
-														elimByPhase[targetPhase]
-															.length
-													}{" "}
-													match(es)
-												</p>
-											</div>
-											<button
-												onClick={() =>
-													setActiveTab("bracket")
-												}
-												className="text-xs font-semibold text-editorial-green border border-editorial-green px-3 py-1.5 hover:bg-editorial-green hover:text-white transition-colors whitespace-nowrap shrink-0"
-											>
-												Go to Bracket →
-											</button>
-										</div>
-									) : (
-										<>
-											<div className="bg-editorial-ink/5 border-l-4 border-editorial-gold px-4 py-2 text-xs text-gray-600">
-												<strong className="font-black text-editorial-ink">
-													Seeding:
-												</strong>{" "}
-												{advanceCount === 16
-													? "1v16, 8v9, 4v13, 5v12, 2v15, 7v10, 3v14, 6v11 — seeds 1 & 2 cannot meet before the Final."
-													: advanceCount === 8
-														? "1v8, 4v5, 2v7, 3v6 — seeds 1 & 2 cannot meet before the Final."
-														: "1v4, 2v3 — seeds 1 & 2 meet only in the Final."}
-											</div>
-
-											<button
-												onClick={() =>
-													setShowSeedPreview(
-														(v) => !v,
-													)
-												}
-												className="flex items-center gap-2 text-xs font-semibold text-gray-500 hover:text-editorial-ink transition-colors"
-											>
-												<ChevronRight
-													size={14}
-													className={`transition-transform ${showSeedPreview ? "rotate-90" : ""}`}
-												/>
-												{showSeedPreview
-													? "Hide"
-													: "Show"}{" "}
-												seeding preview
-											</button>
-
-											{showSeedPreview && (
-												<SeedPreview
-													pairings={pairings}
-													topTeams={topTeams}
-													targetPhase={targetPhase}
-												/>
-											)}
-
-											{advanceError && (
-												<div className="flex items-start gap-2 bg-red-50 border border-red-200 p-3 text-xs text-red-700">
-													<AlertCircle
-														size={13}
-														className="mt-0.5 shrink-0"
-													/>{" "}
-													{advanceError}
-												</div>
-											)}
-											{advanceSuccess && (
-												<div className="bg-editorial-green/10 border border-editorial-green p-3 text-xs text-editorial-green font-semibold">
-													{advanceSuccess}
-												</div>
-											)}
-
-											<div className="flex items-center gap-3 flex-wrap">
-												<button
-													onClick={handleAdvanceTeams}
-													disabled={
-														isAdvancing ||
-														standings.length <
-															advanceCount
-													}
-													className="border-2 border-editorial-ink bg-editorial-gold text-editorial-ink px-6 py-2.5 text-xs font-black uppercase tracking-widest hover:bg-editorial-ink hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-[3px_3px_0px_0px_rgba(26,26,26,1)]"
-												>
-													{isAdvancing
-														? "Seeding…"
-														: `Advance ${advanceCount} Teams →`}
-												</button>
-												{standings.length <
-													advanceCount &&
-													standings.length > 0 && (
-														<p className="text-xs text-gray-400">
-															{standings.length} /{" "}
-															{advanceCount} teams
-															scored
-														</p>
-													)}
-											</div>
-										</>
-									)}
-								</div>
-							</CollapsiblePanel>
 						</>
 					)}
 
@@ -1122,9 +1185,7 @@ export function AdminPage() {
 										No bracket matches yet.
 									</p>
 									<button
-										onClick={() =>
-											setActiveTab("qualifiers")
-										}
+										onClick={() => changeTab("qualifiers")}
 										className="text-xs font-semibold text-editorial-ink border-2 border-editorial-ink px-4 py-2 hover:bg-editorial-gold transition-colors"
 									>
 										← Go to Qualifiers to advance teams
@@ -1298,7 +1359,7 @@ function TeamsTab({
 	const [editDraft, setEditDraft] = useState<Partial<Team>>({});
 	const [editError, setEditError] = useState<string | null>(null);
 	const [bulkRows, setBulkRows] = useState<BulkRow[]>(() =>
-		Array.from({ length: 5 }, () => makeEmptyBulkRow(category)),
+		Array.from({ length: 2 }, () => makeEmptyBulkRow(category)),
 	);
 	const [bulkSaving, setBulkSaving] = useState(false);
 	const [bulkError, setBulkError] = useState<string | null>(null);
@@ -2305,7 +2366,7 @@ function PhaseAccordion({
 
 			{/* Accordion body */}
 			{open && (
-				<div className="divide-y divide-gray-100">
+				<div className="divide-y divide-gray-300">
 					{matches.map((m, i) => (
 						<MatchCard
 							key={m.id}
@@ -2585,7 +2646,7 @@ function MatchCard({
 
 	return (
 		<div
-			className={`px-4 py-3 transition-colors ${hasWinner ? "bg-editorial-green/5" : "bg-white"}`}
+			className={`px-4 py-3.5 transition-colors ${hasWinner ? "bg-editorial-green/5" : "bg-white"}`}
 		>
 			<div className="flex items-center gap-3 flex-wrap">
 				<span className="text-[10px] font-black text-gray-300 w-10 shrink-0 uppercase tracking-wide">

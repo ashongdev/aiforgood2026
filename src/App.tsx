@@ -11,9 +11,10 @@ import { PhaseNavigation } from "./components/PhaseNavigation";
 import { QualifiersTable } from "./components/QualifiersTable";
 import type { SpectatorStanding } from "./components/QualifiersTable";
 import { RulesPage } from "./components/RulesPage";
+import { TeamShowcase } from "./components/TeamShowcase";
 import { useEffects } from "./hooks/useEffects";
 import { supabase } from "./lib/supabase";
-import type { Category, MatchWithTeams, Phase } from "./lib/database.types";
+import type { Category, MatchWithTeams, Phase, Team } from "./lib/database.types";
 import type { Match as LegacyMatch } from "./lib/matchService";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -103,6 +104,7 @@ export default function App() {
 		return (localStorage.getItem("selectedCategory") as "junior" | "senior") ?? "junior";
 	});
 	const [matches, setMatches] = useState<MatchWithTeams[]>([]);
+	const [teams, setTeams] = useState<Team[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
 	const [advanceCount, setAdvanceCount] = useState(0);
 	const [phaseLocks, setPhaseLocks] = useState<Record<string, string>>({});
@@ -129,14 +131,21 @@ export default function App() {
 
 	async function loadMatches() {
 		setIsLoading(true);
-		const { data, error } = await supabase
-			.from("matches")
-			.select("*, team_1:team_1_id(id,team_name,category), team_2:team_2_id(id,team_name,category), winner:winner_id(id,team_name,category)")
-			.eq("phase", currentPhase)
-			.eq("category", supabaseCategory)
-			.order("match_order", { ascending: true });
+		const [matchRes, teamRes] = await Promise.all([
+			supabase
+				.from("matches")
+				.select("*, team_1:team_1_id(id,team_name,category), team_2:team_2_id(id,team_name,category), winner:winner_id(id,team_name,category)")
+				.eq("phase", currentPhase)
+				.eq("category", supabaseCategory)
+				.order("match_order", { ascending: true }),
+			// Only fetch teams for the showcase (Qualifiers pre-game screen)
+			isQualifiers
+				? supabase.from("teams").select("*").eq("category", supabaseCategory).order("team_name")
+				: Promise.resolve({ data: null, error: null }),
+		]);
 
-		if (!error) setMatches((data as MatchWithTeams[]) ?? []);
+		if (!matchRes.error) setMatches((matchRes.data as MatchWithTeams[]) ?? []);
+		if (teamRes.data) setTeams((teamRes.data as Team[]) ?? []);
 		setIsLoading(false);
 	}
 
@@ -273,6 +282,8 @@ export default function App() {
 
 									{lockType === "full" ? (
 										<LockedScoreboardScreen />
+									) : isQualifiers && matches.length === 0 ? (
+										<TeamShowcase teams={teams} category={supabaseCategory} />
 									) : isLeaderboardPhase ? (
 										<QualifiersTable
 											standings={spectatorStandings}

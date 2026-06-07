@@ -24,6 +24,8 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { CustomSelect } from "../components/CustomSelect";
+import type { SelectOption } from "../components/CustomSelect";
 import { useEdgeColumnResize } from "../hooks/useEdgeColumnResize";
 import type {
 	Category,
@@ -1005,54 +1007,41 @@ export function AdminPage() {
 											<label className="text-[10px] font-black uppercase tracking-widest">
 												Team 1
 											</label>
-											<select
+											<CustomSelect
 												value={newTeam1}
-												onChange={(e) =>
-													setNewTeam1(e.target.value)
-												}
-												className="w-full border-2 border-editorial-ink px-2 py-2 text-sm bg-editorial-bg focus:outline-none focus:border-editorial-gold"
-											>
-												<option value="">
-													Select team…
-												</option>
-												{allTeams.map((t) => (
-													<option
-														key={t.id}
-														value={t.id}
-													>
-														{t.team_name}
-													</option>
-												))}
-											</select>
+												defaultValue=""
+												placeholder="Select team…"
+												options={[
+													{ value: "", label: "Select team…" },
+													...allTeams.map((t) => ({
+														value: t.id,
+														label: t.team_name,
+													})),
+												]}
+												onChange={setNewTeam1}
+												className="w-full"
+											/>
 										</div>
 										<div className="space-y-1">
 											<label className="text-[10px] font-black uppercase tracking-widest">
 												Team 2
 											</label>
-											<select
+											<CustomSelect
 												value={newTeam2}
-												onChange={(e) =>
-													setNewTeam2(e.target.value)
-												}
-												className="w-full border-2 border-editorial-ink px-2 py-2 text-sm bg-editorial-bg focus:outline-none focus:border-editorial-gold"
-											>
-												<option value="">
-													Select team…
-												</option>
-												{allTeams
-													.filter(
-														(t) =>
-															t.id !== newTeam1,
-													)
-													.map((t) => (
-														<option
-															key={t.id}
-															value={t.id}
-														>
-															{t.team_name}
-														</option>
-													))}
-											</select>
+												defaultValue=""
+												placeholder="Select team…"
+												options={[
+													{ value: "", label: "Select team…" },
+													...allTeams
+														.filter((t) => t.id !== newTeam1)
+														.map((t) => ({
+															value: t.id,
+															label: t.team_name,
+														})),
+												]}
+												onChange={setNewTeam2}
+												className="w-full"
+											/>
 										</div>
 										<div className="space-y-1">
 											<label className="text-[10px] font-black uppercase tracking-widest">
@@ -3256,119 +3245,7 @@ function ScoreekeepersTab() {
 	);
 }
 
-// ─── SearchableSelect ─────────────────────────────────────────────────────────
-
-function SearchableSelect({
-	options,
-	value,
-	onChange,
-	placeholder,
-}: {
-	options: string[];
-	value: string;
-	onChange: (v: string) => void;
-	placeholder: string;
-}) {
-	const [query, setQuery] = useState("");
-	const [open, setOpen] = useState(false);
-	const containerRef = useRef<HTMLDivElement>(null);
-	const inputRef = useRef<HTMLInputElement>(null);
-
-	const filtered = query
-		? options.filter((o) => o.toLowerCase().includes(query.toLowerCase()))
-		: options;
-
-	useEffect(() => {
-		function onClickOutside(e: MouseEvent) {
-			if (
-				containerRef.current &&
-				!containerRef.current.contains(e.target as Node)
-			) {
-				setOpen(false);
-				setQuery("");
-			}
-		}
-		document.addEventListener("mousedown", onClickOutside);
-		return () => document.removeEventListener("mousedown", onClickOutside);
-	}, []);
-
-	return (
-		<div ref={containerRef} className="relative min-w-44">
-			<button
-				type="button"
-				onClick={() => {
-					const next = !open;
-					setOpen(next);
-					if (next) setTimeout(() => inputRef.current?.focus(), 0);
-				}}
-				className={`w-full flex items-center gap-1.5 border px-2 h-[30px] text-xs text-left transition-colors focus:outline-none ${
-					value
-						? "border-editorial-gold bg-editorial-gold/5 text-editorial-ink"
-						: "border-gray-200 text-gray-400"
-				}`}
-			>
-				<span className="flex-1 truncate font-medium">
-					{value || placeholder}
-				</span>
-				{value && (
-					<span
-						role="button"
-						onClick={(e) => {
-							e.stopPropagation();
-							onChange("");
-							setOpen(false);
-						}}
-						className="text-gray-400 hover:text-gray-700 font-black text-[10px] px-0.5 leading-none"
-					>
-						✕
-					</span>
-				)}
-				<ChevronDown size={11} className="text-gray-400 shrink-0" />
-			</button>
-
-			{open && (
-				<div className="absolute top-full left-0 z-30 w-full min-w-52 bg-white border border-gray-200 shadow-lg mt-0.5">
-					<div className="p-1.5 border-b border-gray-100">
-						<input
-							ref={inputRef}
-							type="text"
-							value={query}
-							onChange={(e) => setQuery(e.target.value)}
-							placeholder="Search…"
-							className="w-full text-xs px-2 py-1 focus:outline-none border border-gray-200 focus:border-editorial-gold"
-						/>
-					</div>
-					<div className="max-h-52 overflow-y-auto">
-						{filtered.length === 0 ? (
-							<p className="px-3 py-2 text-xs text-gray-400">
-								No matches
-							</p>
-						) : (
-							filtered.map((opt) => (
-								<button
-									key={opt}
-									type="button"
-									onClick={() => {
-										onChange(opt);
-										setOpen(false);
-										setQuery("");
-									}}
-									className={`w-full text-left px-3 py-2 text-xs hover:bg-editorial-gold/10 transition-colors ${
-										value === opt
-											? "bg-editorial-gold/10 font-semibold text-editorial-ink"
-											: "text-editorial-ink"
-									}`}
-								>
-									{opt}
-								</button>
-							))
-						)}
-					</div>
-				</div>
-			)}
-		</div>
-	);
-}
+// StyledSelect and SearchableSelect removed — now using shared CustomSelect component.
 
 // ─── AuditTrailPanel ──────────────────────────────────────────────────────────
 
@@ -3474,35 +3351,43 @@ function AuditTrailPanel() {
 			<div className="p-4 space-y-3">
 				{/* Filter row */}
 				<div className="flex items-center gap-2 flex-wrap">
-					{/* Category — plain select (only 3 options, no search needed) */}
-					<select
+					{/* Category */}
+					<CustomSelect
 						value={categoryFilter}
-						onChange={(e) =>
-							setCategoryFilter(
-								e.target.value as "all" | Category,
-							)
+						defaultValue="all"
+						options={[
+							{ value: "all", label: "All categories" },
+							{ value: "Junior", label: "Junior" },
+							{ value: "Senior", label: "Senior" },
+						]}
+						onChange={(v) =>
+							setCategoryFilter(v as "all" | Category)
 						}
-						className="border border-gray-200 px-2 h-[30px] text-xs font-semibold focus:outline-none focus:border-editorial-gold text-editorial-ink"
-					>
-						<option value="all">All categories</option>
-						<option value="Junior">Junior</option>
-						<option value="Senior">Senior</option>
-					</select>
-
-					{/* Scorekeeper searchable dropdown */}
-					<SearchableSelect
-						options={scorekeeperOptions}
-						value={scorekeeperFilter}
-						onChange={setScorekeeperFilter}
-						placeholder="All scorekeepers"
+						showSearch={false}
 					/>
 
-					{/* Team searchable dropdown */}
-					<SearchableSelect
-						options={teamOptions}
+					{/* Scorekeeper */}
+					<CustomSelect
+						value={scorekeeperFilter}
+						defaultValue=""
+						placeholder="All scorekeepers"
+						options={scorekeeperOptions.map(
+							(s): SelectOption => ({ value: s, label: s }),
+						)}
+						onChange={setScorekeeperFilter}
+						className="min-w-44"
+					/>
+
+					{/* Team */}
+					<CustomSelect
 						value={teamFilter}
-						onChange={setTeamFilter}
+						defaultValue=""
 						placeholder="All teams"
+						options={teamOptions.map(
+							(s): SelectOption => ({ value: s, label: s }),
+						)}
+						onChange={setTeamFilter}
+						className="min-w-44"
 					/>
 
 					<button

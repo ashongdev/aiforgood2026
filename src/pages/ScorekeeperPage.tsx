@@ -1,4 +1,5 @@
 import { CloudOff, Loader2, LogOut, RefreshCw, Wifi } from "lucide-react";
+import { CustomSelect } from "../components/CustomSelect";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
@@ -413,61 +414,39 @@ export function ScorekeeperPage() {
 				</span>
 
 				{/* Phase selector */}
-				<select
+				<CustomSelect
+					theme="dark"
 					value={phase}
-					onChange={(e) => setPhase(e.target.value as Phase)}
-					className="border border-white/30 bg-white/10 text-white text-xs font-semibold px-2 py-1.5 focus:outline-none focus:border-editorial-gold"
-				>
-					{PHASES.map((p) => (
-						<option
-							key={p}
-							value={p}
-							className="text-editorial-ink bg-white"
-						>
-							{p}
-						</option>
-					))}
-				</select>
+					options={PHASES.map((p) => ({ value: p, label: p }))}
+					onChange={(v) => setPhase(v as Phase)}
+				/>
 
 				{/* Category selector */}
-				<select
+				<CustomSelect
+					theme="dark"
 					value={category}
-					onChange={(e) => setCategory(e.target.value as Category)}
-					className="border border-white/30 bg-white/10 text-white text-xs font-semibold px-2 py-1.5 focus:outline-none focus:border-editorial-gold"
-				>
-					<option
-						value="Junior"
-						className="text-editorial-ink bg-white"
-					>
-						Junior
-					</option>
-					<option
-						value="Senior"
-						className="text-editorial-ink bg-white"
-					>
-						Senior
-					</option>
-				</select>
+					options={[
+						{ value: "Junior", label: "Junior" },
+						{ value: "Senior", label: "Senior" },
+					]}
+					onChange={(v) => setCategory(v as Category)}
+					showSearch={false}
+				/>
 
 				{/* Table filter */}
-				<select
+				<CustomSelect
+					theme="dark"
 					value={tableFilter}
-					onChange={(e) => setTableFilter(e.target.value)}
-					className="border border-white/30 bg-white/10 text-white text-xs font-semibold px-2 py-1.5 focus:outline-none focus:border-editorial-gold"
-				>
-					<option value="all" className="text-editorial-ink bg-white">
-						All Tables
-					</option>
-					{availableTables.map((t) => (
-						<option
-							key={t}
-							value={String(t)}
-							className="text-editorial-ink bg-white"
-						>
-							Table {t}
-						</option>
-					))}
-				</select>
+					options={[
+						{ value: "all", label: "All Tables" },
+						...availableTables.map((t) => ({
+							value: String(t),
+							label: `Table ${t}`,
+						})),
+					]}
+					onChange={setTableFilter}
+					showSearch={false}
+				/>
 
 				{/* Refresh */}
 				<button

@@ -68,6 +68,7 @@ interface ScoreCellProps {
 	colIndex: number;
 	totalCols: number;
 	totalRows: number;
+	readOnly?: boolean;
 	onChange: (matchId: string, col: ScoreCol, raw: string) => void;
 	onCommit: (matchId: string, col: ScoreCol, raw: string) => void;
 }
@@ -81,6 +82,7 @@ function ScoreCell({
 	colIndex,
 	totalCols,
 	totalRows,
+	readOnly,
 	onChange,
 	onCommit,
 }: ScoreCellProps) {
@@ -119,6 +121,14 @@ function ScoreCell({
 				focusCell(rowIndex, prevCol);
 			}
 		}
+	}
+
+	if (readOnly) {
+		return (
+			<div className="w-full h-full min-w-13 flex items-center justify-center text-center text-sm font-mono font-semibold text-gray-300 select-none cursor-not-allowed">
+				{displayValue || "—"}
+			</div>
+		);
 	}
 
 	return (
@@ -473,7 +483,8 @@ export function ScorekeeperPage() {
 
 	// ── Render ────────────────────────────────────────────────────────────────
 
-	// ── Lock overlay ──────────────────────────────────────────────────────────
+	// ── Lock overlay (personal suspension only) ──────────────────────────────
+
 	if (isLocked) {
 		return (
 			<div className="fixed inset-0 z-50 bg-editorial-ink flex flex-col items-center justify-center text-white px-6 text-center">
@@ -493,27 +504,6 @@ export function ScorekeeperPage() {
 						{profile.email}
 					</p>
 				)}
-			</div>
-		);
-	}
-
-	if (isPhaseLocked) {
-		return (
-			<div className="fixed inset-0 z-50 bg-editorial-ink flex flex-col items-center justify-center text-white px-6 text-center">
-				<div className="border-4 border-editorial-gold p-6 mb-8">
-					<Lock size={40} className="text-editorial-gold mx-auto" />
-				</div>
-				<h1 className="text-xl font-black uppercase tracking-widest mb-3">
-					Phase Locked
-				</h1>
-				<p className="text-white/50 text-sm max-w-xs leading-relaxed">
-					Score entry for <span className="text-white font-bold">{phase}</span> has been
-					locked by the tournament administrator. No further changes can
-					be made to this round.
-				</p>
-				<p className="text-white/25 text-xs mt-8 uppercase tracking-widest">
-					{category} · {phase}
-				</p>
 			</div>
 		);
 	}
@@ -618,6 +608,17 @@ export function ScorekeeperPage() {
 				</div>
 			)}
 
+			{/* ── Phase locked banner ─────────────────────────────────────── */}
+			{isPhaseLocked && (
+				<div className="flex items-center gap-3 px-4 py-3 bg-amber-50 text-amber-800 border-b border-amber-200">
+					<Lock size={13} className="shrink-0" />
+					<span className="text-xs font-semibold">
+						<span className="font-black uppercase tracking-wider">Phase Locked</span>
+						{" — "}Score entry for <strong>{phase}</strong> has been closed by the administrator. Scores are view-only.
+					</span>
+				</div>
+			)}
+
 			{/* ── Grid ────────────────────────────────────────────────────── */}
 			<div className="overflow-x-auto">
 				{isLoading ? (
@@ -635,6 +636,7 @@ export function ScorekeeperPage() {
 						draft={draft}
 						saving={saving}
 						saveError={saveError}
+						readOnly={isPhaseLocked}
 						onChange={handleChange}
 						onCommit={handleCommit}
 						getLiveTotal={(m, t) => getLiveTotal(m, t, 4)}
@@ -645,6 +647,7 @@ export function ScorekeeperPage() {
 						draft={draft}
 						saving={saving}
 						saveError={saveError}
+						readOnly={isPhaseLocked}
 						activeRounds={elimActiveRounds}
 						onAddRound={() =>
 							setElimActiveRounds((n) => Math.min(n + 1, 4))
@@ -690,6 +693,7 @@ interface QualifiersGridProps {
 	draft: DraftState;
 	saving: Record<string, boolean>;
 	saveError: Record<string, string>;
+	readOnly?: boolean;
 	onChange: (matchId: string, col: ScoreCol, raw: string) => void;
 	onCommit: (matchId: string, col: ScoreCol, raw: string) => void;
 	getLiveTotal: (match: MatchWithTeams, team: 1 | 2) => number | null;
@@ -700,6 +704,7 @@ function QualifiersGrid({
 	draft,
 	saving,
 	saveError,
+	readOnly,
 	onChange,
 	onCommit,
 	getLiveTotal,
@@ -839,7 +844,8 @@ function QualifiersGrid({
 										colIndex={colOffset}
 										totalCols={COL_ORDER.length}
 										totalRows={matches.length}
-										onChange={onChange}
+										readOnly={readOnly}
+									onChange={onChange}
 										onCommit={onCommit}
 									/>
 								</td>
@@ -896,7 +902,8 @@ function QualifiersGrid({
 										colIndex={colOffset + 4}
 										totalCols={COL_ORDER.length}
 										totalRows={matches.length}
-										onChange={onChange}
+										readOnly={readOnly}
+									onChange={onChange}
 										onCommit={onCommit}
 									/>
 								</td>
@@ -950,6 +957,7 @@ interface EliminationGridProps {
 	saving: Record<string, boolean>;
 	saveError: Record<string, string>;
 	activeRounds: number;
+	readOnly?: boolean;
 	onAddRound: () => void;
 	onRemoveRound: () => void;
 	onChange: (matchId: string, col: ScoreCol, raw: string) => void;
@@ -964,6 +972,7 @@ function EliminationGrid({
 	saving,
 	saveError,
 	activeRounds,
+	readOnly,
 	onAddRound,
 	onRemoveRound,
 	onChange,
@@ -1118,7 +1127,8 @@ function EliminationGrid({
 										colIndex={colOffset}
 										totalCols={totalCols}
 										totalRows={matches.length}
-										onChange={onChange}
+										readOnly={readOnly}
+									onChange={onChange}
 										onCommit={onCommit}
 									/>
 								</td>
@@ -1163,7 +1173,8 @@ function EliminationGrid({
 										colIndex={colOffset + activeRounds}
 										totalCols={totalCols}
 										totalRows={matches.length}
-										onChange={onChange}
+										readOnly={readOnly}
+									onChange={onChange}
 										onCommit={onCommit}
 									/>
 								</td>

@@ -1,5 +1,6 @@
 -- Scorekeeper lock: admins can lock/unlock individual scorekeepers in real-time.
 -- Run in the Supabase SQL editor.
+-- NOTE: Requires get_my_role() from admin_read_profiles.sql to exist first.
 
 -- ── 1. Add locked column ──────────────────────────────────────────────────────
 
@@ -7,22 +8,14 @@ ALTER TABLE public.user_profiles
   ADD COLUMN IF NOT EXISTS locked boolean NOT NULL DEFAULT false;
 
 -- ── 2. Allow admins to update any profile row (for locking) ──────────────────
--- The existing "profiles: self update" policy only covers own row.
+-- Uses get_my_role() to avoid recursive RLS policy evaluation.
+
+DROP POLICY IF EXISTS "profiles: admin update any" ON public.user_profiles;
 
 CREATE POLICY "profiles: admin update any"
   ON public.user_profiles FOR UPDATE
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.user_profiles
-      WHERE id = auth.uid() AND role = 'admin'
-    )
-  )
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM public.user_profiles
-      WHERE id = auth.uid() AND role = 'admin'
-    )
-  );
+  USING (public.get_my_role() = 'admin')
+  WITH CHECK (public.get_my_role() = 'admin');
 
 -- ── 3. Block locked scorekeepers from writing scores (DB enforcement) ─────────
 -- Replaces the existing "matches: authenticated update" policy.

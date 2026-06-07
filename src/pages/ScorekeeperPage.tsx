@@ -204,6 +204,47 @@ export function ScorekeeperPage() {
 		return () => { supabase.removeChannel(channel); };
 	}, [profile?.id]);
 
+	// ── Phase-level scorekeeper lock ─────────────────────────────────────────
+
+	const [isPhaseLocked, setIsPhaseLocked] = useState(false);
+
+	useEffect(() => {
+		let cancelled = false;
+		supabase
+			.from("phase_locks")
+			.select("scorekeeper_locked")
+			.eq("phase", phase)
+			.eq("category", category)
+			.maybeSingle()
+			.then(({ data }) => {
+				if (!cancelled) setIsPhaseLocked((data as { scorekeeper_locked: boolean } | null)?.scorekeeper_locked ?? false);
+			});
+		return () => { cancelled = true; };
+	}, [phase, category]);
+
+	useEffect(() => {
+		const channel = supabase
+			.channel(`phase-lock-${phase}-${category}`)
+			.on(
+				"postgres_changes",
+				{
+					event: "*",
+					schema: "public",
+					table: "phase_locks",
+					filter: `phase=eq.${phase}`,
+				},
+				(payload) => {
+					if (payload.eventType === "DELETE") {
+						setIsPhaseLocked(false);
+					} else {
+						setIsPhaseLocked((payload.new as { scorekeeper_locked: boolean }).scorekeeper_locked ?? false);
+					}
+				},
+			)
+			.subscribe();
+		return () => { supabase.removeChannel(channel); };
+	}, [phase, category]);
+
 	const isQualifiers = phase === "Qualifiers";
 
 	// ── Data fetching ─────────────────────────────────────────────────────────
@@ -452,6 +493,27 @@ export function ScorekeeperPage() {
 						{profile.email}
 					</p>
 				)}
+			</div>
+		);
+	}
+
+	if (isPhaseLocked) {
+		return (
+			<div className="fixed inset-0 z-50 bg-editorial-ink flex flex-col items-center justify-center text-white px-6 text-center">
+				<div className="border-4 border-editorial-gold p-6 mb-8">
+					<Lock size={40} className="text-editorial-gold mx-auto" />
+				</div>
+				<h1 className="text-xl font-black uppercase tracking-widest mb-3">
+					Phase Locked
+				</h1>
+				<p className="text-white/50 text-sm max-w-xs leading-relaxed">
+					Score entry for <span className="text-white font-bold">{phase}</span> has been
+					locked by the tournament administrator. No further changes can
+					be made to this round.
+				</p>
+				<p className="text-white/25 text-xs mt-8 uppercase tracking-widest">
+					{category} · {phase}
+				</p>
 			</div>
 		);
 	}

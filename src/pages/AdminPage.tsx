@@ -23,9 +23,9 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useAuth } from "../contexts/AuthContext";
-import { CustomSelect } from "../components/CustomSelect";
 import type { SelectOption } from "../components/CustomSelect";
+import { CustomSelect } from "../components/CustomSelect";
+import { useAuth } from "../contexts/AuthContext";
 import { useEdgeColumnResize } from "../hooks/useEdgeColumnResize";
 import type {
 	Category,
@@ -348,8 +348,11 @@ export function AdminPage() {
 	const [standingsOpen, setStandingsOpen] = useState(false);
 	const [advancePanelOpen, setAdvancePanelOpen] = useState(true);
 
-	// Phase locks (keyed by phase string, value = lock_type)
+	// Phase locks — spectator (phase → lock_type) and scorekeeper (phase → locked)
 	const [phaseLocks, setPhaseLocks] = useState<Record<string, string>>({});
+	const [scorekeeperLocks, setScorekeeperLocks] = useState<
+		Record<string, boolean>
+	>({});
 
 	// ── Data loading ────────────────────────────────────────────────────────────
 
@@ -394,11 +397,14 @@ export function AdminPage() {
 			.select("*")
 			.eq("category", category);
 		if (data) {
-			const locks: Record<string, string> = {};
+			const spectator: Record<string, string> = {};
+			const scorekeeper: Record<string, boolean> = {};
 			(data as any[]).forEach((l) => {
-				locks[l.phase] = l.lock_type;
+				if (l.lock_type) spectator[l.phase] = l.lock_type;
+				scorekeeper[l.phase] = l.scorekeeper_locked ?? false;
 			});
-			setPhaseLocks(locks);
+			setPhaseLocks(spectator);
+			setScorekeeperLocks(scorekeeper);
 		}
 	}
 
@@ -436,11 +442,51 @@ export function AdminPage() {
 	}
 
 	async function handleUnlockPhase(phase: string) {
-		const { error } = await supabase
-			.from("phase_locks")
-			.delete()
-			.eq("phase", phase)
-			.eq("category", category);
+		// If the scorekeeper lock is still active, keep the row but clear lock_type.
+		// Otherwise delete the whole row.
+		const skStillLocked = scorekeeperLocks[phase] === true;
+		const { error } = skStillLocked
+			? await supabase
+					.from("phase_locks")
+					.update({ lock_type: null })
+					.eq("phase", phase)
+					.eq("category", category)
+			: await supabase
+					.from("phase_locks")
+					.delete()
+					.eq("phase", phase)
+					.eq("category", category);
+		if (!error) loadPhaseLocks();
+	}
+
+	async function handleLockScorekeepers(phase: string) {
+		await supabase.from("phase_locks").upsert(
+			{
+				phase,
+				category,
+				lock_type: phaseLocks[phase] ?? null,
+				scorekeeper_locked: true,
+			},
+			{ onConflict: "phase,category" },
+		);
+		loadPhaseLocks();
+	}
+
+	async function handleUnlockScorekeepers(phase: string) {
+		// If the spectator lock is still active, keep the row but clear scorekeeper_locked.
+		// Otherwise delete the whole row.
+		const spectatorStillLocked = !!phaseLocks[phase];
+		const { error } = spectatorStillLocked
+			? await supabase
+					.from("phase_locks")
+					.update({ scorekeeper_locked: false })
+					.eq("phase", phase)
+					.eq("category", category)
+			: await supabase
+					.from("phase_locks")
+					.delete()
+					.eq("phase", phase)
+					.eq("category", category);
 		if (!error) loadPhaseLocks();
 	}
 
@@ -834,7 +880,22 @@ export function AdminPage() {
 										</button>
 									</>
 								)}
-								<div className="ml-auto">
+								<div className="ml-auto flex items-center gap-2">
+									<ScorekeeperLockControl
+										phase="Qualifiers"
+										locked={
+											scorekeeperLocks["Qualifiers"] ??
+											false
+										}
+										onLock={() =>
+											handleLockScorekeepers("Qualifiers")
+										}
+										onUnlock={() =>
+											handleUnlockScorekeepers(
+												"Qualifiers",
+											)
+										}
+									/>
 									<LockControl
 										phase="Qualifiers"
 										lockType={
@@ -1012,7 +1073,10 @@ export function AdminPage() {
 												defaultValue=""
 												placeholder="Select team…"
 												options={[
-													{ value: "", label: "Select team…" },
+													{
+														value: "",
+														label: "Select team…",
+													},
 													...allTeams.map((t) => ({
 														value: t.id,
 														label: t.team_name,
@@ -1031,9 +1095,16 @@ export function AdminPage() {
 												defaultValue=""
 												placeholder="Select team…"
 												options={[
-													{ value: "", label: "Select team…" },
+													{
+														value: "",
+														label: "Select team…",
+													},
 													...allTeams
-														.filter((t) => t.id !== newTeam1)
+														.filter(
+															(t) =>
+																t.id !==
+																newTeam1,
+														)
 														.map((t) => ({
 															value: t.id,
 															label: t.team_name,
@@ -1258,6 +1329,9 @@ export function AdminPage() {
 											overrideMatchId={overrideMatchId}
 											winnerConfirming={winnerConfirming}
 											lockType={phaseLocks[phase] ?? null}
+											scorekeeperLocked={
+												scorekeeperLocks[phase] ?? false
+											}
 											onSetWinner={handleSetWinner}
 											onToggleOverride={
 												setOverrideMatchId
@@ -1280,6 +1354,12 @@ export function AdminPage() {
 											}
 											onUnlock={() =>
 												handleUnlockPhase(phase)
+											}
+											onLockScorekeeper={() =>
+												handleLockScorekeepers(phase)
+											}
+											onUnlockScorekeeper={() =>
+												handleUnlockScorekeepers(phase)
 											}
 										/>
 									))}
@@ -1308,6 +1388,11 @@ export function AdminPage() {
 													phaseLocks["Third Place"] ??
 													null
 												}
+												scorekeeperLocked={
+													scorekeeperLocks[
+														"Third Place"
+													] ?? false
+												}
 												onSetWinner={handleSetWinner}
 												onToggleOverride={
 													setOverrideMatchId
@@ -1322,6 +1407,16 @@ export function AdminPage() {
 												}
 												onUnlock={() =>
 													handleUnlockPhase(
+														"Third Place",
+													)
+												}
+												onLockScorekeeper={() =>
+													handleLockScorekeepers(
+														"Third Place",
+													)
+												}
+												onUnlockScorekeeper={() =>
+													handleUnlockScorekeepers(
 														"Third Place",
 													)
 												}
@@ -2327,12 +2422,15 @@ function PhaseAccordion({
 	overrideMatchId,
 	winnerConfirming,
 	lockType,
+	scorekeeperLocked,
 	onSetWinner,
 	onToggleOverride,
 	onAdvanceWinners,
 	canAdvance,
 	onLock,
 	onUnlock,
+	onLockScorekeeper,
+	onUnlockScorekeeper,
 }: {
 	phase: Phase;
 	matches: MatchWithTeams[];
@@ -2340,12 +2438,15 @@ function PhaseAccordion({
 	overrideMatchId: string | null;
 	winnerConfirming: string | null;
 	lockType: string | null;
+	scorekeeperLocked: boolean;
 	onSetWinner: (matchId: string, winnerId: string) => void;
 	onToggleOverride: (id: string | null) => void;
 	onAdvanceWinners?: () => void;
 	canAdvance: boolean;
 	onLock: (lt: "full" | "scores") => void;
 	onUnlock: () => void;
+	onLockScorekeeper: () => void;
+	onUnlockScorekeeper: () => void;
 }) {
 	const allConfirmed = matches.every((m) => m.winner_id);
 	const confirmedCount = matches.filter((m) => m.winner_id).length;
@@ -2396,6 +2497,12 @@ function PhaseAccordion({
 					className="flex items-center gap-2 shrink-0"
 					onClick={(e) => e.stopPropagation()}
 				>
+					<ScorekeeperLockControl
+						phase={phase}
+						locked={scorekeeperLocked}
+						onLock={onLockScorekeeper}
+						onUnlock={onUnlockScorekeeper}
+					/>
 					<LockControl
 						phase={phase}
 						lockType={lockType}
@@ -2455,6 +2562,48 @@ function PhaseAccordion({
 				</div>
 			)}
 		</div>
+	);
+}
+
+// ─── ScorekeeperLockControl ───────────────────────────────────────────────────
+
+function ScorekeeperLockControl({
+	phase: _phase,
+	locked,
+	onLock,
+	onUnlock,
+}: {
+	phase: string;
+	locked: boolean;
+	onLock: () => void;
+	onUnlock: () => void;
+}) {
+	if (locked) {
+		return (
+			<div className="flex items-center gap-2 shrink-0">
+				<span className="text-[10px] font-black uppercase tracking-wider flex items-center gap-1 px-2 py-1 border bg-orange-50 text-orange-700 border-orange-200">
+					<Lock size={9} />
+					SK Locked
+				</span>
+				<button
+					onClick={onUnlock}
+					className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-editorial-ink transition-colors"
+				>
+					<Unlock size={10} /> Unlock
+				</button>
+			</div>
+		);
+	}
+
+	return (
+		<button
+			onClick={onLock}
+			className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-orange-600 transition-colors shrink-0"
+			title="Lock score entry for this phase"
+		>
+			<Lock size={10} />
+			Lock SK
+		</button>
 	);
 }
 
@@ -3125,7 +3274,9 @@ function ScoreekeepersTab() {
 													Locked
 												</span>
 											)}
-											<span className={`font-medium truncate ${sk.locked ? "text-gray-400" : "text-editorial-ink"}`}>
+											<span
+												className={`font-medium truncate ${sk.locked ? "text-gray-400" : "text-editorial-ink"}`}
+											>
 												{sk.email ?? (
 													<span className="text-gray-300 italic text-xs">
 														no email

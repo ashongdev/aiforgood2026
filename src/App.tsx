@@ -1,7 +1,8 @@
 import { AnimatePresence } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
 import ReactGA from "react-ga4";
-import { BookOpen, RotateCcw } from "lucide-react";
+import { BookOpen, CloudOff, RotateCcw } from "lucide-react";
+import { useOnlineStatus } from "./hooks/useOnlineStatus";
 import { BracketList } from "./components/BracketList";
 import { CategoryToggle } from "./components/CategoryToggle";
 import { LoadingSpinner } from "./components/LoadingSpinner";
@@ -18,6 +19,8 @@ import type { Category, MatchWithTeams, Phase, Team } from "./lib/database.types
 import type { Match as LegacyMatch } from "./lib/matchService";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
+
+const SPECTATOR_CACHE_PREFIX = "spectator_cache";
 
 const PHASES: Phase[] = [
 	"Qualifiers",
@@ -103,9 +106,11 @@ export default function App() {
 	const [category, setCategory] = useState<"junior" | "senior">(() => {
 		return (localStorage.getItem("selectedCategory") as "junior" | "senior") ?? "junior";
 	});
+	const isOnline = useOnlineStatus();
 	const [matches, setMatches] = useState<MatchWithTeams[]>([]);
 	const [teams, setTeams] = useState<Team[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
+	const [cachedAt, setCachedAt] = useState<Date | null>(null);
 	const [advanceCount, setAdvanceCount] = useState(0);
 	const [phaseLocks, setPhaseLocks] = useState<Record<string, string>>({});
 	const [selectedMatch, setSelectedMatch] = useState<LegacyMatch | null>(null);
@@ -129,23 +134,60 @@ export default function App() {
 
 	// ── Data loading ──────────────────────────────────────────────────────────
 
+	function loadFromCache(cacheKey: string) {
+		try {
+			const raw = localStorage.getItem(cacheKey);
+			if (!raw) return false;
+			const { matches: m, teams: t, timestamp } = JSON.parse(raw) as {
+				matches: MatchWithTeams[];
+				teams: Team[];
+				timestamp: number;
+			};
+			setMatches(m ?? []);
+			if (t?.length > 0) setTeams(t);
+			setCachedAt(new Date(timestamp));
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
 	async function loadMatches() {
 		setIsLoading(true);
-		const [matchRes, teamRes] = await Promise.all([
-			supabase
-				.from("matches")
-				.select("*, team_1:team_1_id(id,team_name,category), team_2:team_2_id(id,team_name,category), winner:winner_id(id,team_name,category)")
-				.eq("phase", currentPhase)
-				.eq("category", supabaseCategory)
-				.order("match_order", { ascending: true }),
-			// Only fetch teams for the showcase (Qualifiers pre-game screen)
-			isQualifiers
-				? supabase.from("teams").select("*").eq("category", supabaseCategory).order("team_name")
-				: Promise.resolve({ data: null, error: null }),
-		]);
+		const cacheKey = `${SPECTATOR_CACHE_PREFIX}_${currentPhase}_${supabaseCategory}`;
 
-		if (!matchRes.error) setMatches((matchRes.data as MatchWithTeams[]) ?? []);
-		if (teamRes.data) setTeams((teamRes.data as Team[]) ?? []);
+		try {
+			const [matchRes, teamRes] = await Promise.all([
+				supabase
+					.from("matches")
+					.select("*, team_1:team_1_id(id,team_name,category), team_2:team_2_id(id,team_name,category), winner:winner_id(id,team_name,category)")
+					.eq("phase", currentPhase)
+					.eq("category", supabaseCategory)
+					.order("match_order", { ascending: true }),
+				isQualifiers
+					? supabase.from("teams").select("*").eq("category", supabaseCategory).order("team_name")
+					: Promise.resolve({ data: null, error: null }),
+			]);
+
+			if (matchRes.error) {
+				loadFromCache(cacheKey);
+			} else {
+				const matchData = (matchRes.data as MatchWithTeams[]) ?? [];
+				const teamData = (teamRes.data as Team[]) ?? [];
+				setMatches(matchData);
+				if (teamData.length > 0) setTeams(teamData);
+				setCachedAt(null);
+				// Persist to cache for offline use
+				localStorage.setItem(cacheKey, JSON.stringify({
+					matches: matchData,
+					teams: teamData,
+					timestamp: Date.now(),
+				}));
+			}
+		} catch {
+			loadFromCache(cacheKey);
+		}
+
 		setIsLoading(false);
 	}
 
@@ -268,6 +310,23 @@ export default function App() {
 					{!selectedMatch ? (
 						<div className="w-full flex flex-col items-center">
 							<CategoryToggle category={category} onChange={setCategory} />
+
+							{/* Offline / cached data banner */}
+							{(!isOnline || cachedAt) && (
+								<div className="w-full max-w-2xl mt-3 flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
+									<CloudOff size={13} className="shrink-0" />
+									<span>
+										{!isOnline && !cachedAt && "Offline — connecting to last known scores…"}
+										{cachedAt && (
+											<>
+												{!isOnline ? "Offline · " : ""}
+												Showing cached scores from{" "}
+												{cachedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+											</>
+										)}
+									</span>
+								</div>
+							)}
 
 							{isLoading && <LoadingSpinner />}
 

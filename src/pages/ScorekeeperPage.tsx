@@ -1,8 +1,9 @@
-import { LogOut, RefreshCw } from "lucide-react";
+import { CloudOff, Loader2, LogOut, RefreshCw, Wifi } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useEdgeColumnResize } from "../hooks/useEdgeColumnResize";
+import { useOfflineQueue } from "../hooks/useOfflineQueue";
 import type { Category, MatchWithTeams, Phase } from "../lib/database.types";
 import { supabase } from "../lib/supabase";
 
@@ -168,6 +169,8 @@ export function ScorekeeperPage() {
 	const [isLoading, setIsLoading] = useState(true);
 	const [elimActiveRounds, setElimActiveRounds] = useState(1);
 
+	const { isOnline, pendingCount, isFlushing, enqueue } = useOfflineQueue(loadMatches);
+
 	const isQualifiers = phase === "Qualifiers";
 
 	// ── Data fetching ─────────────────────────────────────────────────────────
@@ -303,10 +306,13 @@ export function ScorekeeperPage() {
 			t2r[3],
 		);
 
-		// Optimistic local update
+		// Optimistic local update (always — even offline)
 		setMatches((prev) =>
 			prev.map((m) => (m.id === matchId ? { ...m, ...update } : m)),
 		);
+
+		// If offline, queue the write and return — will sync on reconnect
+		if (enqueue(matchId, update)) return;
 
 		// Persist to Supabase
 		setSaving((prev) => ({ ...prev, [matchId]: true }));
@@ -487,6 +493,33 @@ export function ScorekeeperPage() {
 					<LogOut size={15} />
 				</button>
 			</div>
+
+			{/* ── Offline / sync banner ────────────────────────────────── */}
+			{(!isOnline || pendingCount > 0) && (
+				<div
+					className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold ${
+						isOnline
+							? "bg-editorial-green/10 text-editorial-green border-b border-editorial-green/20"
+							: "bg-amber-50 text-amber-800 border-b border-amber-200"
+					}`}
+				>
+					{isOnline ? (
+						isFlushing ? (
+							<Loader2 size={13} className="animate-spin shrink-0" />
+						) : (
+							<Wifi size={13} className="shrink-0" />
+						)
+					) : (
+						<CloudOff size={13} className="shrink-0" />
+					)}
+					<span>
+						{!isOnline && pendingCount === 0 && "Offline — scores saved locally"}
+						{!isOnline && pendingCount > 0 && `Offline · ${pendingCount} change${pendingCount !== 1 ? "s" : ""} pending`}
+						{isOnline && isFlushing && `Syncing ${pendingCount} pending change${pendingCount !== 1 ? "s" : ""}…`}
+						{isOnline && !isFlushing && pendingCount > 0 && `${pendingCount} change${pendingCount !== 1 ? "s" : ""} queued — will sync shortly`}
+					</span>
+				</div>
+			)}
 
 			{/* ── Grid ────────────────────────────────────────────────────── */}
 			<div className="overflow-x-auto">

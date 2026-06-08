@@ -244,10 +244,13 @@ export function ScorekeeperPage() {
 					filter: `phase=eq.${phase}`,
 				},
 				(payload) => {
+					// The Realtime filter is phase-only; guard against wrong-category events
+					const row = (payload.eventType === "DELETE" ? payload.old : payload.new) as { category?: string; scorekeeper_locked?: boolean };
+					if (row?.category !== category) return;
 					if (payload.eventType === "DELETE") {
 						setIsPhaseLocked(false);
 					} else {
-						setIsPhaseLocked((payload.new as { scorekeeper_locked: boolean }).scorekeeper_locked ?? false);
+						setIsPhaseLocked(row.scorekeeper_locked ?? false);
 					}
 				},
 			)
@@ -398,12 +401,14 @@ export function ScorekeeperPage() {
 		// If offline, queue the write and return — will sync on reconnect
 		if (enqueue(matchId, update)) return;
 
-		// Persist to Supabase
+		// Persist to Supabase — use .select("id") so we can detect silent RLS failures
+		// (an RLS block returns 204 with 0 rows; without .select we can't distinguish it from success)
 		setSaving((prev) => ({ ...prev, [matchId]: true }));
-		const { error } = await supabase
+		const { data: saved, error } = await supabase
 			.from("matches")
 			.update(update)
-			.eq("id", matchId);
+			.eq("id", matchId)
+			.select("id");
 
 		setSaving((prev) => {
 			const next = { ...prev };
@@ -415,6 +420,15 @@ export function ScorekeeperPage() {
 			console.error("[Scorekeeper] Save error:", error.message);
 			setSaveError((prev) => ({ ...prev, [matchId]: error.message }));
 			// Revert optimistic update
+			setMatches((prev) =>
+				prev.map((m) =>
+					m.id === matchId ? { ...m, [col]: current } : m,
+				),
+			);
+		} else if (!saved || saved.length === 0) {
+			// RLS silently blocked the write — phase is locked or account suspended
+			console.error("[Scorekeeper] Save blocked by DB policy (phase locked or account suspended)");
+			setSaveError((prev) => ({ ...prev, [matchId]: "Blocked — phase may be locked" }));
 			setMatches((prev) =>
 				prev.map((m) =>
 					m.id === matchId ? { ...m, [col]: current } : m,

@@ -1,4 +1,4 @@
-const CACHE = "aiforgood-shell-v1";
+const CACHE = "aiforgood-shell-v2";
 
 // On install: cache the app shell (index.html)
 self.addEventListener("install", (evt) => {
@@ -18,6 +18,11 @@ self.addEventListener("activate", (evt) => {
 
 self.addEventListener("fetch", (evt) => {
   const url = new URL(evt.request.url);
+
+  // Only handle http(s) — chrome-extension:// and other schemes cannot be cached
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    return;
+  }
 
   // Let Supabase API and Google API calls pass through untouched —
   // offline handling for those is done in app code (localStorage cache / queue)

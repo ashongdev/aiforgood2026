@@ -49,8 +49,8 @@ CREATE POLICY "matches: authenticated update"
       public.get_my_role() = 'admin'
       OR NOT EXISTS (
         SELECT 1 FROM public.phase_locks pl
-        WHERE pl.phase = phase
-          AND pl.category = category
+        WHERE pl.phase    = matches.phase
+          AND pl.category = matches.category
           AND pl.scorekeeper_locked = true
       )
     )
@@ -65,8 +65,8 @@ CREATE POLICY "matches: authenticated update"
       public.get_my_role() = 'admin'
       OR NOT EXISTS (
         SELECT 1 FROM public.phase_locks pl
-        WHERE pl.phase = phase
-          AND pl.category = category
+        WHERE pl.phase    = matches.phase
+          AND pl.category = matches.category
           AND pl.scorekeeper_locked = true
       )
     )

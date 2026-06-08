@@ -1,7 +1,7 @@
 import { CloudOff, Lock, Loader2, LogOut, RefreshCw, Wifi } from "lucide-react";
 import { CustomSelect } from "../components/CustomSelect";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useEdgeColumnResize } from "../hooks/useEdgeColumnResize";
 import { useOfflineQueue } from "../hooks/useOfflineQueue";
@@ -167,12 +167,34 @@ export function ScorekeeperPage() {
 	const { profile, role, signOut } = useAuth();
 	const navigate = useNavigate();
 
-	const [phase, setPhase] = useState<Phase>("Qualifiers");
-	const [category, setCategory] = useState<Category>("Junior");
-	const [tableFilter, setTableFilter] = useState<string>(
-		// Default to their assigned table if set, otherwise "All"
-		profile?.table_number !== null ? String(profile?.table_number) : "all",
-	);
+	const [searchParams, setSearchParams] = useSearchParams();
+
+	// Derive filter values from URL params, fall back to localStorage then defaults
+	const phase: Phase = PHASES.includes(searchParams.get("phase") as Phase)
+		? (searchParams.get("phase") as Phase)
+		: ((localStorage.getItem("sk_phase") as Phase | null) ?? "Qualifiers");
+	const category: Category = (["Junior", "Senior"] as Category[]).includes(
+		searchParams.get("category") as Category,
+	)
+		? (searchParams.get("category") as Category)
+		: ((localStorage.getItem("sk_category") as Category | null) ?? "Junior");
+	const tableFilter: string =
+		searchParams.get("table") ??
+		localStorage.getItem("sk_table_filter") ??
+		(profile?.table_number != null ? String(profile.table_number) : "all");
+
+	function setPhase(p: Phase) {
+		setSearchParams((prev) => { const n = new URLSearchParams(prev); n.set("phase", p); return n; }, { replace: true });
+		localStorage.setItem("sk_phase", p);
+	}
+	function setCategory(c: Category) {
+		setSearchParams((prev) => { const n = new URLSearchParams(prev); n.set("category", c); return n; }, { replace: true });
+		localStorage.setItem("sk_category", c);
+	}
+	function setTableFilter(t: string) {
+		setSearchParams((prev) => { const n = new URLSearchParams(prev); n.set("table", t); return n; }, { replace: true });
+		localStorage.setItem("sk_table_filter", t);
+	}
 	const [matches, setMatches] = useState<MatchWithTeams[]>([]);
 	const [draft, setDraft] = useState<DraftState>({});
 	const [saving, setSaving] = useState<Record<string, boolean>>({});

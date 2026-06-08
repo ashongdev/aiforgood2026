@@ -19,7 +19,7 @@ export function LoadingSpinner() {
 				transition={{ duration: 1.5, repeat: Infinity }}
 				className="text-[10px] font-black uppercase tracking-widest text-editorial-ink"
 			>
-				Loading Scores
+				Loading
 			</motion.div>
 
 			{/* Bouncing dots */}

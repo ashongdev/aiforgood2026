@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight, Lock } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import ReactGA from "react-ga4";
-import { teamLogos } from "../lib/teamLogos";
+import { getCountryFlag } from "../lib/countryFlag";
 import { AnimatedScore } from "./AnimatedScore";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -9,6 +9,7 @@ import { AnimatedScore } from "./AnimatedScore";
 export interface SpectatorStanding {
 	rank: number;
 	team_name: string;
+	country?: string | null;
 	r1: number | null;
 	r2: number | null;
 	r3: number | null;
@@ -136,16 +137,14 @@ export function QualifiersTable({
 									{actualIndex + 1}
 								</span>
 
-								{/* Logo + Name */}
+								{/* Flag + Name */}
 								<span className="flex-1 min-w-0 flex items-center gap-2">
-									{teamLogos[standing.team_name] ? (
-										<img
-											src={teamLogos[standing.team_name]}
-											alt={standing.team_name}
-											className="w-6 h-6 object-contain shrink-0"
-										/>
+									{getCountryFlag(standing.country) ? (
+										<span className="text-lg leading-none shrink-0" aria-label={standing.country ?? ""}>
+											{getCountryFlag(standing.country)}
+										</span>
 									) : (
-										<span className="w-6 h-6 shrink-0" />
+										<span className="w-5 shrink-0" />
 									)}
 									<span className={`text-sm font-semibold truncate ${isExpanded ? "text-white" : "text-editorial-ink"}`}>
 										{standing.team_name}

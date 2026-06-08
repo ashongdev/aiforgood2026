@@ -1,6 +1,6 @@
 import { ArrowLeft, Globe, Users } from "lucide-react";
 import { useState } from "react";
-import { teamLogos } from "../lib/teamLogos";
+import { getCountryFlag } from "../lib/countryFlag";
 import type { Team } from "../lib/database.types";
 
 // ─── Team initials fallback ────────────────────────────────────────────────────
@@ -16,7 +16,7 @@ function initials(name: string): string {
 // ─── Detail view ──────────────────────────────────────────────────────────────
 
 function TeamDetail({ team, onBack }: { team: Team; onBack: () => void }) {
-	const logo = teamLogos[team.team_name];
+	const flag = getCountryFlag(team.country);
 
 	return (
 		<div className="w-full max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-200">
@@ -30,12 +30,10 @@ function TeamDetail({ team, onBack }: { team: Team; onBack: () => void }) {
 			<div className="border-2 border-editorial-ink bg-white shadow-[6px_6px_0px_0px_rgba(26,26,26,1)]">
 				{/* Header band */}
 				<div className="bg-editorial-ink px-6 py-5 flex items-center gap-5">
-					{logo ? (
-						<img
-							src={logo}
-							alt={team.team_name}
-							className="w-16 h-16 object-contain shrink-0 bg-white/10 p-1"
-						/>
+					{flag ? (
+						<span className="text-5xl leading-none shrink-0" aria-label={team.country ?? ""}>
+							{flag}
+						</span>
 					) : (
 						<div className="w-16 h-16 shrink-0 bg-editorial-gold flex items-center justify-center">
 							<span className="text-xl font-black text-editorial-ink">
@@ -153,21 +151,19 @@ export function TeamShowcase({ teams, category }: TeamShowcaseProps) {
 			) : (
 				<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 px-4 md:px-0">
 					{teams.map((team) => {
-						const logo = teamLogos[team.team_name];
+						const flag = getCountryFlag(team.country);
 						return (
 							<button
 								key={team.id}
 								onClick={() => setSelected(team)}
 								className="group text-left border-2 border-editorial-ink bg-white hover:bg-editorial-gold hover:shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] transition-all duration-150 shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] flex flex-col items-center p-4 gap-3"
 							>
-								{/* Logo or initials */}
+								{/* Flag or initials */}
 								<div className="w-14 h-14 flex items-center justify-center shrink-0">
-									{logo ? (
-										<img
-											src={logo}
-											alt={team.team_name}
-											className="w-full h-full object-contain"
-										/>
+									{flag ? (
+										<span className="text-4xl leading-none" aria-label={team.country ?? ""}>
+											{flag}
+										</span>
 									) : (
 										<div className="w-14 h-14 bg-editorial-ink flex items-center justify-center group-hover:bg-white transition-colors">
 											<span className="text-lg font-black text-white group-hover:text-editorial-ink transition-colors">

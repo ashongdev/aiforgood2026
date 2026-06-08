@@ -1,5 +1,6 @@
 import { motion } from "motion/react";
 import ReactGA from "react-ga4";
+import { getCountryFlag } from "../lib/countryFlag";
 import { AnimatedScore } from "./AnimatedScore";
 
 interface MatchNodeProps {
@@ -7,6 +8,8 @@ interface MatchNodeProps {
 		id: string;
 		team1: string;
 		team2: string;
+		team1Country?: string | null;
+		team2Country?: string | null;
 		team1Score: number | null;
 		team2Score: number | null;
 		winner: number | null;
@@ -17,59 +20,6 @@ interface MatchNodeProps {
 	rankingMap?: Record<string, number>;
 	onClick: () => void;
 }
-
-const teamLogos: Record<string, string> = {
-	//Senior Team Logos
-	Nanovolts: "/logos/Senior/Nanovolts.svg",
-	"AI Squad": "/logos/Senior/Ai Squad.svg",
-	Masterminds: "/logos/Senior/Masterminds.svg",
-	"ARIS Eagles Senior": "/logos/Senior/Aris Eagles Senior.svg",
-	"Redeemer Tech": "/logos/Senior/Redeemer Tech.svg",
-	"STEMR Seniors": "/logos/Senior/Stemr Seniors.svg",
-	Rookies: "/logos/Senior/Rookies.svg",
-	Createch: "/logos/Senior/Create T.svg",
-	"Team Applied": "/logos/Senior/Team Applied.svg",
-	"Fusion Innovators": "/logos/Senior/Fusion Innovators.svg",
-	"Beta Gold-ST": "/logos/Senior/Beta Gold-St.svg",
-	Klone: "/logos/Senior/Klone.svg",
-	"Kepler-Robot": "/logos/Senior/Kepler-Robot.svg",
-	YCEM: "/logos/Senior/Ycem.svg",
-	"Ahtoo Alpha Gold ST": "/logos/Senior/Ahtoo Alpha Gold St.svg",
-	Novex: "/logos/Senior/Novex.svg",
-	"The Problem Solvers": "/logos/Senior/The Problem Solvers.svg",
-	Mechatronics: "/logos/Senior/Mechatronics.svg",
-
-	//Junior Team Logos
-	"ARIS Eagles Junior": "/logos/Junior/Aris Eagles Junior.svg",
-	"Beta Gold-Jr": "/logos/Junior/BetavGold.svg",
-	Bytebots: "/logos/Junior/Byetbots.svg",
-	Mechminds: "/logos/Junior/Mechminds.svg",
-	Varified: "/logos/Junior/Varified'.svg",
-	"Redeemer Builders": "/logos/Junior/Redeemer.svg",
-	"Redeemer Innovators": "/logos/Junior/Redeemer Innovatios.svg",
-	"Grace Worriors": "/logos/Junior/GraceWarriors.svg",
-	Nexgen: "/logos/Junior/NEXGEn.svg",
-	"Bweh Trailblazers": "/logos/Junior/Bweh!.svg",
-	"Tech-Titans": "/logos/Junior/Tech Titans.svg",
-	"Legacy AI": "/logos/Junior/Legacy.svg",
-	Glocity: "/logos/Junior/Glocity.svg",
-	"Kinderkids Dream Builders": "/logos/Junior/Dreambuiold.svg",
-	"STEMT Juniors": "/logos/Junior/Stemr Seniors.svg",
-	"J2W Robotics Team": "/logos/Junior/J2.svg",
-	"Kinderkids Robostars": "/logos/Junior/Kinderkids.svg",
-	"Ahtoo Alpha Gold JT": "/logos/Junior/Ahtoo.svg",
-	"Beta Gold-JT": "/logos/Junior/BetavGold.svg",
-	"WIOSO Intellectuals": "/logos/Junior/WIOSS.svg",
-	"Global Eagles": "/logos/Junior/Eagles.svg",
-	"Guardian Lions": "/logos/Junior/Lions.svg",
-	"Pro-Lego-Codex": "/logos/Junior/Pro Lego.svg",
-	"The Queens": "/logos/Junior/Queens.svg",
-	"Fearsom Dragons": "/logos/Junior/Fearsome Dragons.svg",
-	"Nexus Communicators": "/logos/Junior/Nexus Communicators.svg",
-	"Quantum Minds": "/logos/Junior/Quantum Minds.svg",
-	"ACS Tech-Rangers": "/logos/Junior/ACS Tech-Rangers.svg",
-	"ACS Tech-Titans": "/logos/Junior/Tech Titans.svg",
-};
 
 export function MatchNode({
 	match,
@@ -119,12 +69,10 @@ export function MatchNode({
 					}`}
 				>
 					<span className="flex items-center gap-2 min-w-0">
-						{teamLogos[match.team1] && (
-							<img
-								src={teamLogos[match.team1]}
-								alt={match.team1}
-								className="w-7 h-7 object-contain shrink-0"
-							/>
+						{getCountryFlag(match.team1Country) && (
+							<span className="text-2xl leading-none shrink-0" aria-label={match.team1Country ?? ""}>
+								{getCountryFlag(match.team1Country)}
+							</span>
 						)}
 						<span className="flex items-center gap-2 min-w-0">
 							<span className="font-serif text-2xl font-black italic tracking-tight leading-tight truncate">
@@ -164,12 +112,10 @@ export function MatchNode({
 					}`}
 				>
 					<span className="flex items-center gap-2 min-w-0">
-						{teamLogos[match.team2] && (
-							<img
-								src={teamLogos[match.team2]}
-								alt={match.team2}
-								className="w-7 h-7 object-contain shrink-0"
-							/>
+						{getCountryFlag(match.team2Country) && (
+							<span className="text-2xl leading-none shrink-0" aria-label={match.team2Country ?? ""}>
+								{getCountryFlag(match.team2Country)}
+							</span>
 						)}
 						<span className="flex items-center gap-2 min-w-0">
 							<span className="font-serif text-2xl font-black italic tracking-tight leading-tight truncate">

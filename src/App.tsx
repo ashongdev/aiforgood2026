@@ -38,17 +38,18 @@ const PHASES: Phase[] = [
 function computeSpectatorStandings(matches: MatchWithTeams[], rankByTotal = false): SpectatorStanding[] {
 	const map = new Map<string, {
 		team_name: string;
+		country: string | null;
 		r1: number | null; r2: number | null; r3: number | null; r4: number | null;
 		best_round: number; total: number;
 	}>();
 
 	function processTeam(
-		id: string | null, team: { team_name: string } | null,
+		id: string | null, team: { team_name: string; country?: string | null } | null,
 		r1: number | null, r2: number | null, r3: number | null, r4: number | null,
 	) {
 		if (!id || !team) return;
 		const scored = [r1, r2, r3, r4].filter((v): v is number => v !== null && v > 0);
-		const e = map.get(id) ?? { team_name: team.team_name, r1: null, r2: null, r3: null, r4: null, best_round: 0, total: 0 };
+		const e = map.get(id) ?? { team_name: team.team_name, country: team.country ?? null, r1: null, r2: null, r3: null, r4: null, best_round: 0, total: 0 };
 		if (e.r1 === null && r1 !== null) e.r1 = r1;
 		if (e.r2 === null && r2 !== null) e.r2 = r2;
 		if (e.r3 === null && r3 !== null) e.r3 = r3;
@@ -77,6 +78,8 @@ function toMatch(m: MatchWithTeams): LegacyMatch {
 		id: m.id,
 		team1: m.team_1?.team_name ?? "TBD",
 		team2: m.team_2?.team_name ?? "TBD",
+		team1Country: (m.team_1 as { country?: string | null } | null)?.country ?? null,
+		team2Country: (m.team_2 as { country?: string | null } | null)?.country ?? null,
 		team1Score: m.team_1_final_points,
 		team2Score: m.team_2_final_points,
 		team1R1: m.team_1_r1,
@@ -160,7 +163,7 @@ export default function App() {
 			const [matchRes, teamRes] = await Promise.all([
 				supabase
 					.from("matches")
-					.select("*, team_1:team_1_id(id,team_name,category), team_2:team_2_id(id,team_name,category), winner:winner_id(id,team_name,category)")
+					.select("*, team_1:team_1_id(id,team_name,category,country), team_2:team_2_id(id,team_name,category,country), winner:winner_id(id,team_name,category)")
 					.eq("phase", currentPhase)
 					.eq("category", supabaseCategory)
 					.order("match_order", { ascending: true }),

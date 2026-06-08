@@ -1,0 +1,37 @@
+const COUNTRY_CODES: Record<string, string> = {
+  GHANA: "GH", NIGERIA: "NG", KENYA: "KE", "SOUTH AFRICA": "ZA",
+  EGYPT: "EG", ETHIOPIA: "ET", TANZANIA: "TZ", UGANDA: "UG",
+  RWANDA: "RW", SENEGAL: "SN", "IVORY COAST": "CI", "CÔTE D'IVOIRE": "CI",
+  CAMEROON: "CM", ZAMBIA: "ZM", ZIMBABWE: "ZW", BOTSWANA: "BW",
+  NAMIBIA: "NA", MOZAMBIQUE: "MZ", MALI: "ML", GUINEA: "GN",
+  BENIN: "BJ", TOGO: "TG", "BURKINA FASO": "BF", "SIERRA LEONE": "SL",
+  LIBERIA: "LR", GAMBIA: "GM", MAURITIUS: "MU", MOROCCO: "MA",
+  TUNISIA: "TN", ALGERIA: "DZ", LIBYA: "LY", SUDAN: "SD",
+  CHAD: "TD", NIGER: "NE", "UNITED STATES": "US", USA: "US",
+  "UNITED KINGDOM": "GB", UK: "GB", CANADA: "CA", AUSTRALIA: "AU",
+  INDIA: "IN", CHINA: "CN", JAPAN: "JP", GERMANY: "DE",
+  FRANCE: "FR", BRAZIL: "BR", PORTUGAL: "PT", SPAIN: "ES",
+  ITALY: "IT", NETHERLANDS: "NL", SWEDEN: "SE", NORWAY: "NO",
+  FINLAND: "FI", DENMARK: "DK", POLAND: "PL", TURKEY: "TR",
+  "SAUDI ARABIA": "SA", UAE: "AE", "UNITED ARAB EMIRATES": "AE",
+  QATAR: "QA", JORDAN: "JO", LEBANON: "LB", PAKISTAN: "PK",
+  BANGLADESH: "BD", "SRI LANKA": "LK", INDONESIA: "ID",
+  MALAYSIA: "MY", PHILIPPINES: "PH", VIETNAM: "VN", THAILAND: "TH",
+  SINGAPORE: "SG", "NEW ZEALAND": "NZ", ARGENTINA: "AR", CHILE: "CL",
+  COLOMBIA: "CO", PERU: "PE", MEXICO: "MX",
+};
+
+function toFlagEmoji(code: string): string {
+  return [...code.toUpperCase()]
+    .map((c) => String.fromCodePoint(c.charCodeAt(0) + 127397))
+    .join("");
+}
+
+export function getCountryFlag(country: string | null | undefined): string {
+  if (!country) return "";
+  const upper = country.trim().toUpperCase();
+  const code = COUNTRY_CODES[upper];
+  if (code) return toFlagEmoji(code);
+  if (upper.length === 2) return toFlagEmoji(upper);
+  return "";
+}

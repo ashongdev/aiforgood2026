@@ -8,6 +8,7 @@ import { LoginPage } from "./pages/LoginPage.tsx";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute.tsx";
 import { ScorekeeperPage } from "./pages/ScorekeeperPage.tsx";
 import { AdminPage } from "./pages/AdminPage.tsx";
+import { RefereePage } from "./pages/RefereePage.tsx";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +29,16 @@ createRoot(document.getElementById("root")!).render(
 						element={
 							<ProtectedRoute allowedRoles={["scorekeeper", "admin"]}>
 								<ScorekeeperPage />
+							</ProtectedRoute>
+						}
+					/>
+
+					{/* Referee mobile entry — requires 'referee' or 'admin' role */}
+					<Route
+						path="/referee"
+						element={
+							<ProtectedRoute allowedRoles={["referee", "admin"]}>
+								<RefereePage />
 							</ProtectedRoute>
 						}
 					/>

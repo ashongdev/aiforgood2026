@@ -38,7 +38,9 @@ async function sendEmail(
   password: string,
   tableNumber: number | null,
   appUrl: string,
+  role: "scorekeeper" | "referee" = "scorekeeper",
 ): Promise<boolean> {
+  const roleLabel = role === "referee" ? "Referee" : "Scorekeeper";
   const tableNote = tableNumber
     ? `<p>You have been assigned to <strong>Table ${tableNumber}</strong>.</p>`
     : "";
@@ -51,10 +53,10 @@ async function sendEmail(
     body: JSON.stringify({
       from: "AI for Good <onboarding@resend.dev>",
       to: [to],
-      subject: "Your Scorekeeper Account — AI for Good",
+      subject: `Your ${roleLabel} Account — AI for Good`,
       html: `
         <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
-          <h2 style="color:#1a1a1a">You've been added as a scorekeeper</h2>
+          <h2 style="color:#1a1a1a">You've been added as a ${roleLabel.toLowerCase()}</h2>
           <p>Sign in at <a href="${appUrl}/login">${appUrl}/login</a> using:</p>
           <table style="border-collapse:collapse;margin:16px 0">
             <tr>
@@ -126,9 +128,10 @@ Deno.serve(async (req) => {
   try {
     // ── Create ─────────────────────────────────────────────────────────────────
     if (action === "create") {
-      const { email, table_number } = body as {
+      const { email, table_number, role: staffRole = "scorekeeper" } = body as {
         email: string;
         table_number: number | null;
+        role?: "scorekeeper" | "referee";
       };
 
       const password = generatePassword();
@@ -149,7 +152,7 @@ Deno.serve(async (req) => {
 
       await adminClient.from("user_profiles").insert({
         id: newUser.user.id,
-        role: "scorekeeper",
+        role: staffRole,
         table_number: table_number ?? null,
         email,
       });
@@ -166,6 +169,7 @@ Deno.serve(async (req) => {
           password,
           table_number ?? null,
           appUrl,
+          staffRole,
         );
       }
 

@@ -1,4 +1,4 @@
-export type Role = 'admin' | 'scorekeeper'
+export type Role = 'admin' | 'scorekeeper' | 'referee'
 export type Category = 'Junior' | 'Senior'
 export type Phase =
   | 'Qualifiers'
@@ -19,7 +19,7 @@ export interface UserProfile {
 
 export interface ScorekeeperProfile {
   id: string
-  role: 'scorekeeper'
+  role: 'scorekeeper' | 'referee'
   table_number: number | null
   email: string | null
   locked: boolean
@@ -72,6 +72,9 @@ export interface Match {
   match_order: number
   winner_id: string | null
   updated_at: string
+  scheduled_time: string | null
+  // Per-round mission breakdown (keys: "t1r1"…"t2r4", values: RoundBreakdown)
+  score_breakdown: Record<string, Record<string, number>> | null
 }
 
 // Match row joined with team names (used in scorekeeper grid)

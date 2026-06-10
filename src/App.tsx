@@ -1,7 +1,7 @@
 import { AnimatePresence } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
 import ReactGA from "react-ga4";
-import { BookOpen, CloudOff, RotateCcw } from "lucide-react";
+import { BookOpen, CalendarDays, CloudOff, RotateCcw } from "lucide-react";
 import { useOnlineStatus } from "./hooks/useOnlineStatus";
 import { BracketList } from "./components/BracketList";
 import { CategoryToggle } from "./components/CategoryToggle";
@@ -12,6 +12,8 @@ import { PhaseNavigation } from "./components/PhaseNavigation";
 import { QualifiersTable } from "./components/QualifiersTable";
 import type { SpectatorStanding } from "./components/QualifiersTable";
 import { RulesPage } from "./components/RulesPage";
+import { ScheduleView } from "./components/ScheduleView";
+import { TeamBreakdownModal } from "./components/TeamBreakdownModal";
 import { TeamShowcase } from "./components/TeamShowcase";
 import { useEffects } from "./hooks/useEffects";
 import { supabase } from "./lib/supabase";
@@ -66,11 +68,11 @@ function computeSpectatorStandings(matches: MatchWithTeams[], rankByTotal = fals
 		processTeam(m.team_2_id, m.team_2, m.team_2_r1, m.team_2_r2, m.team_2_r3, m.team_2_r4);
 	}
 
-	return Array.from(map.values())
-		.sort((a, b) => rankByTotal
+	return Array.from(map.entries())
+		.sort(([, a], [, b]) => rankByTotal
 			? (b.total !== a.total ? b.total - a.total : b.best_round - a.best_round)
 			: (b.best_round !== a.best_round ? b.best_round - a.best_round : b.total - a.total))
-		.map((e, i) => ({ ...e, rank: i + 1 }));
+		.map(([id, e], i) => ({ ...e, teamId: id, rank: i + 1 }));
 }
 
 function toMatch(m: MatchWithTeams): LegacyMatch {
@@ -117,7 +119,8 @@ export default function App() {
 	const [advanceCount, setAdvanceCount] = useState(0);
 	const [phaseLocks, setPhaseLocks] = useState<Record<string, string>>({});
 	const [selectedMatch, setSelectedMatch] = useState<LegacyMatch | null>(null);
-	const [currentPage, setCurrentPage] = useState<"bracket" | "rules">("bracket");
+	const [currentPage, setCurrentPage] = useState<"bracket" | "rules" | "schedule">("bracket");
+	const [breakdownTeam, setBreakdownTeam] = useState<{ id: string; name: string } | null>(null);
 	const { effects, triggerEffect } = useEffects();
 
 	const currentPhase = PHASES[phaseIndex];
@@ -292,15 +295,25 @@ export default function App() {
 					<RotateCcw size={24} className={isLoading ? "animate-spin" : ""} />
 				</button>
 				<button
+					onClick={() => setCurrentPage(currentPage === "schedule" ? "bracket" : "schedule")}
+					className={`border-2 border-editorial-ink p-3 hover:bg-editorial-ink hover:text-editorial-gold transition-colors shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] ${
+						currentPage === "schedule" ? "bg-editorial-ink text-white" : "bg-editorial-gold text-editorial-ink"
+					}`}
+					aria-label="Toggle schedule"
+					title={currentPage === "schedule" ? "View Bracket" : "View Schedule"}
+				>
+					<CalendarDays size={24} />
+				</button>
+				<button
 					onClick={() => {
 						ReactGA.event({ category: "User", action: "Scoring Rules Button Clicked" });
-						setCurrentPage(currentPage === "bracket" ? "rules" : "bracket");
+						setCurrentPage(currentPage === "rules" ? "bracket" : "rules");
 					}}
 					className={`border-2 border-editorial-ink p-3 hover:bg-editorial-ink hover:text-editorial-gold transition-colors shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] ${
 						currentPage === "rules" ? "bg-editorial-ink text-white" : "bg-editorial-gold text-editorial-ink"
 					}`}
 					aria-label="Toggle rules"
-					title={currentPage === "bracket" ? "View Scoring Rules" : "View Bracket"}
+					title={currentPage === "rules" ? "View Bracket" : "View Scoring Rules"}
 				>
 					<BookOpen size={24} />
 				</button>
@@ -308,6 +321,11 @@ export default function App() {
 
 			{currentPage === "rules" ? (
 				<RulesPage />
+			) : currentPage === "schedule" ? (
+				<div className="w-full flex flex-col items-center px-4">
+					<CategoryToggle category={category} onChange={setCategory} />
+					<ScheduleView category={supabaseCategory} />
+				</div>
 			) : (
 				<AnimatePresence mode="wait">
 					{!selectedMatch ? (
@@ -351,6 +369,7 @@ export default function App() {
 											standings={spectatorStandings}
 											advanceCount={phaseAdvanceCount}
 											scoresHidden={lockType === "scores"}
+											onViewBreakdown={(id, name) => setBreakdownTeam({ id, name })}
 										/>
 									) : matches.length === 0 ? (
 										<div className="text-center py-16 text-sm text-gray-400">
@@ -380,6 +399,15 @@ export default function App() {
 					)}
 				</AnimatePresence>
 			)}
+
+		{breakdownTeam && (
+			<TeamBreakdownModal
+				teamId={breakdownTeam.id}
+				teamName={breakdownTeam.name}
+				category={supabaseCategory}
+				onClose={() => setBreakdownTeam(null)}
+			/>
+		)}
 		</div>
 	);
 }

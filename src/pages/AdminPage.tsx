@@ -347,6 +347,7 @@ export function AdminPage() {
 	const [matchListOpen, setMatchListOpen] = useState(false);
 	const [standingsOpen, setStandingsOpen] = useState(false);
 	const [advancePanelOpen, setAdvancePanelOpen] = useState(true);
+	const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
 
 	// Phase locks — spectator (phase → lock_type) and scorekeeper (phase → locked)
 	const [phaseLocks, setPhaseLocks] = useState<Record<string, string>>({});
@@ -565,6 +566,18 @@ export function AdminPage() {
 			.delete()
 			.eq("id", matchId);
 		if (!error) loadData();
+	}
+
+	async function handleSaveScheduledTime(matchId: string, value: string) {
+		const scheduled_time = value ? new Date(value).toISOString() : null;
+		await supabase.from("matches").update({ scheduled_time }).eq("id", matchId);
+		setEditingScheduleId(null);
+		setQualifierMatches((prev) =>
+			prev.map((m) => (m.id === matchId ? { ...m, scheduled_time } : m)),
+		);
+		setElimMatches((prev) =>
+			prev.map((m) => (m.id === matchId ? { ...m, scheduled_time } : m)),
+		);
 	}
 
 	// ── Bracket advancement ─────────────────────────────────────────────────────
@@ -1186,6 +1199,9 @@ export function AdminPage() {
 											<span className="text-[10px] font-black uppercase tracking-widest text-gray-400 w-12 text-center">
 												Table
 											</span>
+											<span className="text-[10px] font-black uppercase tracking-widest text-gray-400 w-36 text-center hidden sm:block">
+												Scheduled
+											</span>
 											<span className="w-8" />
 										</div>
 										{qualifierMatches.map((m, i) => (
@@ -1220,6 +1236,31 @@ export function AdminPage() {
 												<span className="text-xs text-gray-400 font-mono w-12 text-center shrink-0">
 													{m.table_number ?? "—"}
 												</span>
+												<div className="hidden sm:block w-36 shrink-0">
+													{editingScheduleId === m.id ? (
+														<input
+															type="datetime-local"
+															defaultValue={m.scheduled_time ? new Date(m.scheduled_time).toISOString().slice(0, 16) : ""}
+															onBlur={(e) => handleSaveScheduledTime(m.id, e.target.value)}
+															onKeyDown={(e) => {
+																if (e.key === "Enter") handleSaveScheduledTime(m.id, (e.target as HTMLInputElement).value);
+																if (e.key === "Escape") setEditingScheduleId(null);
+															}}
+															autoFocus
+															className="w-full border border-editorial-gold px-1.5 py-0.5 text-xs focus:outline-none"
+														/>
+													) : (
+														<button
+															onClick={() => setEditingScheduleId(m.id)}
+															className="text-xs text-gray-400 hover:text-editorial-ink transition-colors truncate w-full text-left"
+															title="Click to set scheduled time"
+														>
+															{m.scheduled_time
+																? new Date(m.scheduled_time).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+																: <span className="text-gray-200">Set time…</span>}
+														</button>
+													)}
+												</div>
 												<button
 													onClick={() =>
 														handleDeleteMatch(m.id)
@@ -2847,6 +2888,15 @@ function MatchCard({
 		t1Score === t2Score &&
 		t1Score > 0;
 	const showPicker = !hasWinner || isOverriding;
+	const [editingTime, setEditingTime] = useState(false);
+	const [localSchedule, setLocalSchedule] = useState<string | null>(match.scheduled_time);
+
+	async function saveTime(value: string) {
+		const t = value ? new Date(value).toISOString() : null;
+		setLocalSchedule(t);
+		setEditingTime(false);
+		await supabase.from("matches").update({ scheduled_time: t }).eq("id", match.id);
+	}
 
 	return (
 		<div
@@ -2893,6 +2943,29 @@ function MatchCard({
 				</span>
 
 				<div className="shrink-0 flex items-center gap-2">
+					{editingTime ? (
+						<input
+							type="datetime-local"
+							defaultValue={localSchedule ? new Date(localSchedule).toISOString().slice(0, 16) : ""}
+							onBlur={(e) => saveTime(e.target.value)}
+							onKeyDown={(e) => {
+								if (e.key === "Enter") saveTime((e.target as HTMLInputElement).value);
+								if (e.key === "Escape") setEditingTime(false);
+							}}
+							autoFocus
+							className="border border-editorial-gold px-1.5 py-0.5 text-xs focus:outline-none w-40"
+						/>
+					) : (
+						<button
+							onClick={() => setEditingTime(true)}
+							className="text-[10px] text-gray-300 hover:text-editorial-ink transition-colors"
+							title="Set scheduled time"
+						>
+							{localSchedule
+								? new Date(localSchedule).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+								: "＋ time"}
+						</button>
+					)}
 					{hasWinner && !isOverriding && (
 						<>
 							<span className="text-xs font-black text-editorial-green">
@@ -2981,6 +3054,7 @@ function ScoreekeepersTab() {
 	const [addOpen, setAddOpen] = useState(false);
 	const [addEmail, setAddEmail] = useState("");
 	const [addTable, setAddTable] = useState("");
+	const [addRole, setAddRole] = useState<"scorekeeper" | "referee">("scorekeeper");
 	const [isAdding, setIsAdding] = useState(false);
 	const [addError, setAddError] = useState<string | null>(null);
 	const [newCred, setNewCred] = useState<{
@@ -2997,12 +3071,64 @@ function ScoreekeepersTab() {
 	const [isSavingEdit, setIsSavingEdit] = useState(false);
 	const [lockingId, setLockingId] = useState<string | null>(null);
 
+	// Bulk import state
+	type BulkStaffRow = { email: string; role: "scorekeeper" | "referee"; table_number: string; status: "pending" | "ok" | "error"; message: string };
+	const [bulkOpen, setBulkOpen] = useState(false);
+	const [bulkRows, setBulkRows] = useState<BulkStaffRow[]>([]);
+	const [isBulkImporting, setIsBulkImporting] = useState(false);
+	const [bulkSummary, setBulkSummary] = useState<string | null>(null);
+
+	function parseBulkCSV(text: string): BulkStaffRow[] {
+		const lines = text.split(/\r?\n/).filter((l) => l.trim());
+		if (!lines.length) return [];
+		const firstCols = lines[0].toLowerCase().split(",").map((c) => c.trim());
+		const startIdx = firstCols.includes("email") ? 1 : 0;
+		return lines.slice(startIdx).map((line) => {
+			const cols = line.split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
+			return {
+				email: cols[0] ?? "",
+				role: (cols[1] === "referee" ? "referee" : "scorekeeper") as "scorekeeper" | "referee",
+				table_number: cols[2] ?? "",
+				status: "pending" as const,
+				message: "",
+			};
+		}).filter((r) => r.email);
+	}
+
+	async function handleBulkImport() {
+		if (!bulkRows.length) return;
+		setIsBulkImporting(true);
+		setBulkSummary(null);
+		let created = 0;
+		let failed = 0;
+		const updated = [...bulkRows];
+		for (let i = 0; i < updated.length; i++) {
+			if (updated[i].status === "ok") { created++; continue; }
+			const row = updated[i];
+			const tableNum = row.table_number.trim() ? parseInt(row.table_number, 10) : null;
+			const { data, error } = await supabase.functions.invoke("manage-scorekeepers", {
+				body: { action: "create", email: row.email, role: row.role, table_number: tableNum },
+			});
+			if (error || (data as { error?: string })?.error) {
+				updated[i] = { ...row, status: "error", message: (data as { error?: string })?.error ?? error?.message ?? "Failed" };
+				failed++;
+			} else {
+				updated[i] = { ...row, status: "ok", message: `Created (pwd: ${(data as { password: string }).password})` };
+				created++;
+			}
+			setBulkRows([...updated]);
+		}
+		setBulkSummary(`${created} created, ${failed} failed`);
+		setIsBulkImporting(false);
+		await loadScorekeepers();
+	}
+
 	async function loadScorekeepers() {
 		setIsLoading(true);
 		const { data } = await supabase
 			.from("user_profiles")
 			.select("id, email, table_number, created_at, role, locked")
-			.eq("role", "scorekeeper")
+			.in("role", ["scorekeeper", "referee"])
 			.order("created_at", { ascending: false });
 		setScorekeepers((data as ScorekeeperProfile[]) ?? []);
 		setIsLoading(false);
@@ -3028,6 +3154,7 @@ function ScoreekeepersTab() {
 					action: "create",
 					email: trimmed,
 					table_number: tableNum,
+					role: addRole,
 				},
 			},
 		);
@@ -3162,9 +3289,9 @@ function ScoreekeepersTab() {
 				</div>
 			)}
 
-			{/* ── Add scorekeeper panel ──────────────────────────────────── */}
+			{/* ── Add staff panel ──────────────────────────────────────── */}
 			<CollapsiblePanel
-				title="Add Scorekeeper"
+				title="Add Staff Member"
 				open={addOpen}
 				onToggle={() => setAddOpen((v) => !v)}
 				accent
@@ -3177,7 +3304,7 @@ function ScoreekeepersTab() {
 							</label>
 							<input
 								type="email"
-								placeholder="scorekeeper@example.com"
+								placeholder="staff@example.com"
 								value={addEmail}
 								onChange={(e) => setAddEmail(e.target.value)}
 								onKeyDown={(e) =>
@@ -3185,6 +3312,19 @@ function ScoreekeepersTab() {
 								}
 								className="w-full border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:border-editorial-gold text-editorial-ink placeholder:text-gray-300"
 							/>
+						</div>
+						<div className="w-40">
+							<label className="text-[10px] uppercase tracking-widest font-black text-gray-400 mb-1 block">
+								Role *
+							</label>
+							<select
+								value={addRole}
+								onChange={(e) => setAddRole(e.target.value as "scorekeeper" | "referee")}
+								className="w-full border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:border-editorial-gold text-editorial-ink bg-white"
+							>
+								<option value="scorekeeper">Scorekeeper</option>
+								<option value="referee">Referee</option>
+							</select>
 						</div>
 						<div className="w-32">
 							<label className="text-[10px] uppercase tracking-widest font-black text-gray-400 mb-1 block">
@@ -3223,7 +3363,7 @@ function ScoreekeepersTab() {
 			<div className="border border-gray-200 bg-white">
 				<div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-200 bg-gray-50">
 					<span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
-						Active Scorekeepers ({scorekeepers.length})
+						Staff ({scorekeepers.length})
 					</span>
 					<button
 						onClick={loadScorekeepers}
@@ -3242,7 +3382,7 @@ function ScoreekeepersTab() {
 					</div>
 				) : scorekeepers.length === 0 ? (
 					<div className="py-10 text-center text-sm text-gray-400">
-						No scorekeepers yet. Add one above.
+						No staff yet. Add one above.
 					</div>
 				) : (
 					<table className="w-full text-sm">
@@ -3250,6 +3390,9 @@ function ScoreekeepersTab() {
 							<tr className="border-b border-gray-100 bg-gray-50/50">
 								<th className="text-left px-4 py-2 text-[10px] font-black uppercase tracking-widest text-gray-400">
 									Email
+								</th>
+								<th className="text-left px-4 py-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-24">
+									Role
 								</th>
 								<th className="text-left px-4 py-2 text-[10px] font-black uppercase tracking-widest text-gray-400 w-28">
 									Table
@@ -3284,6 +3427,15 @@ function ScoreekeepersTab() {
 												)}
 											</span>
 										</div>
+									</td>
+									<td className="px-4 py-2.5">
+										<span className={`text-[10px] font-black uppercase tracking-widest px-1.5 py-0.5 border ${
+											sk.role === "referee"
+												? "text-blue-700 border-blue-200 bg-blue-50"
+												: "text-gray-500 border-gray-200 bg-gray-50"
+										}`}>
+											{sk.role === "referee" ? "Referee" : "Scorekeeper"}
+										</span>
 									</td>
 									<td className="px-4 py-2.5">
 										{editingId === sk.id ? (
@@ -3410,6 +3562,99 @@ function ScoreekeepersTab() {
 					</table>
 				)}
 			</div>
+
+			{/* ── Bulk import staff ──────────────────────────────────────── */}
+			<CollapsiblePanel
+				title="Bulk Import Staff"
+				open={bulkOpen}
+				onToggle={() => { setBulkOpen((v) => !v); setBulkSummary(null); }}
+			>
+				<div className="p-4 space-y-3">
+					<p className="text-xs text-gray-500">
+						Upload a CSV with columns: <code className="bg-gray-100 px-1">email, role, table_number</code> (role: <em>scorekeeper</em> or <em>referee</em>; table_number optional).
+					</p>
+					<input
+						type="file"
+						accept=".csv,.txt"
+						onChange={async (e) => {
+							const file = e.target.files?.[0];
+							if (!file) return;
+							const text = await file.text();
+							setBulkRows(parseBulkCSV(text));
+							setBulkSummary(null);
+						}}
+						className="text-sm text-gray-600"
+					/>
+					{bulkRows.length > 0 && (
+						<div className="overflow-x-auto border border-gray-200">
+							<table className="w-full text-xs">
+								<thead>
+									<tr className="bg-gray-50 border-b border-gray-200">
+										<th className="text-left px-3 py-2 font-black uppercase tracking-widest text-gray-400">Email</th>
+										<th className="text-left px-3 py-2 font-black uppercase tracking-widest text-gray-400 w-32">Role</th>
+										<th className="text-left px-3 py-2 font-black uppercase tracking-widest text-gray-400 w-24">Table</th>
+										<th className="text-left px-3 py-2 font-black uppercase tracking-widest text-gray-400 w-36">Status</th>
+									</tr>
+								</thead>
+								<tbody className="divide-y divide-gray-100">
+									{bulkRows.map((row, i) => (
+										<tr key={i} className={row.status === "ok" ? "bg-green-50/40" : row.status === "error" ? "bg-red-50/40" : ""}>
+											<td className="px-3 py-2 text-editorial-ink">{row.email}</td>
+											<td className="px-3 py-2">
+												<select
+													value={row.role}
+													disabled={isBulkImporting || row.status === "ok"}
+													onChange={(e) => setBulkRows((prev) => prev.map((r, idx) => idx === i ? { ...r, role: e.target.value as "scorekeeper" | "referee" } : r))}
+													className="border border-gray-200 px-1 py-0.5 text-xs bg-white disabled:opacity-60"
+												>
+													<option value="scorekeeper">Scorekeeper</option>
+													<option value="referee">Referee</option>
+												</select>
+											</td>
+											<td className="px-3 py-2">
+												<input
+													type="number"
+													value={row.table_number}
+													disabled={isBulkImporting || row.status === "ok"}
+													onChange={(e) => setBulkRows((prev) => prev.map((r, idx) => idx === i ? { ...r, table_number: e.target.value } : r))}
+													placeholder="—"
+													className="w-16 border border-gray-200 px-1 py-0.5 text-xs disabled:opacity-60"
+												/>
+											</td>
+											<td className="px-3 py-2">
+												{row.status === "ok" && <span className="text-green-700 font-bold">✓ {row.message}</span>}
+												{row.status === "error" && <span className="text-red-600">✗ {row.message}</span>}
+												{row.status === "pending" && <span className="text-gray-400">—</span>}
+											</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
+					)}
+					{bulkSummary && (
+						<p className="text-xs font-bold text-editorial-ink">{bulkSummary}</p>
+					)}
+					<div className="flex items-center gap-3">
+						<button
+							onClick={handleBulkImport}
+							disabled={isBulkImporting || bulkRows.filter((r) => r.status !== "ok").length === 0}
+							className="flex items-center gap-1.5 px-4 py-2 bg-editorial-ink text-white text-xs font-black uppercase tracking-widest hover:bg-editorial-gold hover:text-editorial-ink transition-colors disabled:opacity-40"
+						>
+							{isBulkImporting ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+							{isBulkImporting ? "Importing…" : `Import ${bulkRows.filter((r) => r.status !== "ok").length} Staff`}
+						</button>
+						{bulkRows.length > 0 && !isBulkImporting && (
+							<button
+								onClick={() => { setBulkRows([]); setBulkSummary(null); }}
+								className="text-xs text-gray-400 hover:text-gray-600 underline"
+							>
+								Clear
+							</button>
+						)}
+					</div>
+				</div>
+			</CollapsiblePanel>
 
 			{/* ── Audit trail ────────────────────────────────────────────── */}
 			<AuditTrailPanel />

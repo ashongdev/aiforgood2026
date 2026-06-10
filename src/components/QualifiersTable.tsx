@@ -9,6 +9,7 @@ import { AnimatedScore } from "./AnimatedScore";
 export interface SpectatorStanding {
 	rank: number;
 	team_name: string;
+	teamId?: string;
 	country?: string | null;
 	r1: number | null;
 	r2: number | null;
@@ -24,11 +25,19 @@ interface QualifiersTableProps {
 	advanceCount?: number;
 	/** Lock type "scores" — show team names but hide all score values. */
 	scoresHidden?: boolean;
+	/** Called when a team's "breakdown" button is tapped. */
+	onViewBreakdown?: (teamId: string, teamName: string) => void;
 }
 
 // ─── Animated expand panel ────────────────────────────────────────────────────
 
-function AnimatedPanel({ isOpen, children }: { isOpen: boolean; children: React.ReactNode }) {
+function AnimatedPanel({
+	isOpen,
+	children,
+}: {
+	isOpen: boolean;
+	children: React.ReactNode;
+}) {
 	const ref = useRef<HTMLDivElement>(null);
 	const [height, setHeight] = useState(0);
 
@@ -37,7 +46,13 @@ function AnimatedPanel({ isOpen, children }: { isOpen: boolean; children: React.
 	}, [isOpen, children]);
 
 	return (
-		<div style={{ height: `${height}px`, overflow: "hidden", transition: "height 250ms cubic-bezier(0.4,0,0.2,1)" }}>
+		<div
+			style={{
+				height: `${height}px`,
+				overflow: "hidden",
+				transition: "height 250ms cubic-bezier(0.4,0,0.2,1)",
+			}}
+		>
 			<div ref={ref}>{children}</div>
 		</div>
 	);
@@ -49,6 +64,7 @@ export function QualifiersTable({
 	standings,
 	advanceCount = 0,
 	scoresHidden = false,
+	onViewBreakdown,
 }: QualifiersTableProps) {
 	const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
 	const [currentPage, setCurrentPage] = useState(1);
@@ -57,14 +73,19 @@ export function QualifiersTable({
 	if (!standings || standings.length === 0) {
 		return (
 			<div className="text-center py-8">
-				<p className="text-sm text-gray-400">No qualifier standings available yet.</p>
+				<p className="text-sm text-gray-400">
+					No qualifier standings available yet.
+				</p>
 			</div>
 		);
 	}
 
 	const totalPages = Math.ceil(standings.length / itemsPerPage);
 	const startIndex = (currentPage - 1) * itemsPerPage;
-	const pageStandings = standings.slice(startIndex, startIndex + itemsPerPage);
+	const pageStandings = standings.slice(
+		startIndex,
+		startIndex + itemsPerPage,
+	);
 
 	return (
 		<div className="w-full max-w-6xl mx-auto space-y-0">
@@ -93,12 +114,19 @@ export function QualifiersTable({
 
 			{/* Column header */}
 			<div className="flex items-center gap-3 px-3 py-2 bg-editorial-ink border-2 border-editorial-ink border-l-4 border-l-editorial-ink">
-				<span className="w-8 shrink-0 text-[10px] font-black uppercase tracking-widest text-white/60">#</span>
-				<span className="flex-1 min-w-0 text-[10px] font-black uppercase tracking-widest text-white/60">Team</span>
+				<span className="w-8 shrink-0 text-[10px] font-black uppercase tracking-widest text-white/60">
+					#
+				</span>
+				<span className="flex-1 min-w-0 text-[10px] font-black uppercase tracking-widest text-white/60">
+					Team
+				</span>
 				{!scoresHidden && (
 					<span className="hidden sm:flex items-center gap-1 shrink-0">
 						{["R1", "R2", "R3", "R4"].map((r) => (
-							<span key={r} className="inline-flex items-center justify-center w-9 text-[10px] font-black uppercase tracking-widest text-white/60">
+							<span
+								key={r}
+								className="inline-flex items-center justify-center w-9 text-[10px] font-black uppercase tracking-widest text-white/60"
+							>
 								{r}
 							</span>
 						))}
@@ -113,7 +141,8 @@ export function QualifiersTable({
 			<div className="space-y-0">
 				{pageStandings.map((standing, index) => {
 					const actualIndex = startIndex + index;
-					const progresses = advanceCount > 0 && actualIndex < advanceCount;
+					const progresses =
+						advanceCount > 0 && actualIndex < advanceCount;
 					const isExpanded = expandedTeam === standing.team_name;
 
 					return (
@@ -121,85 +150,182 @@ export function QualifiersTable({
 							<button
 								onClick={() => {
 									if (scoresHidden) return;
-									ReactGA.event({ category: "User", action: `Team Clicked:${standing.team_name}` });
-									setExpandedTeam(isExpanded ? null : standing.team_name);
+									ReactGA.event({
+										category: "User",
+										action: `Team Clicked:${standing.team_name}`,
+									});
+									setExpandedTeam(
+										isExpanded ? null : standing.team_name,
+									);
 								}}
 								className={`w-full text-left flex items-center gap-3 px-3 py-3 border-t border-b-0 border-r-0 border-editorial-ink/20 border-l-4 transition-colors ${
-									progresses ? "border-l-editorial-gold" : "border-l-transparent"
+									progresses
+										? "border-l-editorial-gold"
+										: "border-l-transparent"
 								} ${
-									isExpanded ? "bg-editorial-ink text-white" : "bg-white hover:bg-editorial-gold/5"
+									isExpanded
+										? "bg-editorial-ink text-white"
+										: "bg-white hover:bg-editorial-gold/5"
 								} ${scoresHidden ? "cursor-default" : "cursor-pointer"}`}
 							>
 								{/* Rank badge */}
-								<span className={`w-8 h-8 shrink-0 flex items-center justify-center border-2 font-black text-sm ${
-									isExpanded ? "border-white text-white" : "border-editorial-ink text-editorial-ink"
-								}`}>
+								<span
+									className={`w-8 h-8 shrink-0 flex items-center justify-center border-2 font-black text-sm ${
+										isExpanded
+											? "border-white text-white"
+											: "border-editorial-ink text-editorial-ink"
+									}`}
+								>
 									{actualIndex + 1}
 								</span>
 
 								{/* Flag + Name */}
 								<span className="flex-1 min-w-0 flex items-center gap-2">
 									{getCountryFlag(standing.country) ? (
-										<span className="text-lg leading-none shrink-0" aria-label={standing.country ?? ""}>
+										<span
+											className="text-lg leading-none shrink-0"
+											aria-label={standing.country ?? ""}
+										>
 											{getCountryFlag(standing.country)}
 										</span>
 									) : (
 										<span className="w-5 shrink-0" />
 									)}
-									<span className={`text-sm font-semibold truncate ${isExpanded ? "text-white" : "text-editorial-ink"}`}>
+									<span
+										className={`text-sm font-semibold truncate ${isExpanded ? "text-white" : "text-editorial-ink"}`}
+									>
 										{standing.team_name}
 									</span>
 								</span>
 
 								{scoresHidden ? (
-									<span className="text-xs text-gray-300">—</span>
+									<span className="text-xs text-gray-300">
+										—
+									</span>
 								) : (
 									<>
 										{/* Round pills */}
 										<span className="hidden sm:flex items-center gap-1 shrink-0">
-											{[standing.r1, standing.r2, standing.r3, standing.r4].map((score, i) => (
-												<span key={i} className={`inline-flex items-center justify-center w-9 h-7 text-xs font-bold border ${
-													isExpanded ? "border-white/40 text-white" : "border-editorial-ink/20 text-editorial-ink"
-												}`}>
-													<AnimatedScore value={score !== null ? String(score) : "0"} />
+											{[
+												standing.r1,
+												standing.r2,
+												standing.r3,
+												standing.r4,
+											].map((score, i) => (
+												<span
+													key={i}
+													className={`inline-flex items-center justify-center w-9 h-7 text-xs font-bold border ${
+														isExpanded
+															? "border-white/40 text-white"
+															: "border-editorial-ink/20 text-editorial-ink"
+													}`}
+												>
+													<AnimatedScore
+														value={
+															score !== null
+																? String(score)
+																: "0"
+														}
+													/>
 												</span>
 											))}
 										</span>
 
 										{/* Total */}
-										<span className={`shrink-0 w-12 text-right text-sm font-black ${
-											isExpanded ? "text-editorial-gold" : standing.total > 0 ? "text-editorial-green" : "text-gray-400"
-										}`}>
-											<AnimatedScore value={String(standing.total)} />
+										<span
+											className={`shrink-0 w-12 text-right text-sm font-black ${
+												isExpanded
+													? "text-editorial-gold"
+													: standing.total > 0
+														? "text-editorial-green"
+														: "text-gray-400"
+											}`}
+										>
+											<AnimatedScore
+												value={String(standing.total)}
+											/>
 										</span>
 									</>
 								)}
 							</button>
 
 							{/* Expanded detail */}
-							{!scoresHidden && (
+							{scoresHidden && (
 								<AnimatedPanel isOpen={isExpanded}>
 									<div className="bg-white border-t border-editorial-ink/10 px-4 py-4">
 										<div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
 											{[
-												{ label: "Round 1", score: standing.r1 },
-												{ label: "Round 2", score: standing.r2 },
-												{ label: "Round 3", score: standing.r3 },
-												{ label: "Round 4", score: standing.r4 },
+												{
+													label: "Round 1",
+													score: standing.r1,
+												},
+												{
+													label: "Round 2",
+													score: standing.r2,
+												},
+												{
+													label: "Round 3",
+													score: standing.r3,
+												},
+												{
+													label: "Round 4",
+													score: standing.r4,
+												},
 											].map((round) => (
-												<div key={round.label} className="flex items-center justify-between sm:flex-col sm:items-center sm:justify-center p-3 bg-gray-50 border border-editorial-ink/15 sm:text-center">
-													<p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{round.label}</p>
+												<div
+													key={round.label}
+													className="flex items-center justify-between sm:flex-col sm:items-center sm:justify-center p-3 bg-gray-50 border border-editorial-ink/15 sm:text-center"
+												>
+													<p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+														{round.label}
+													</p>
 													<p className="text-xl font-black text-editorial-ink">
-														<AnimatedScore value={round.score !== null ? String(round.score) : "0"} />
+														<AnimatedScore
+															value={
+																round.score !==
+																null
+																	? String(
+																			round.score,
+																		)
+																	: "0"
+															}
+														/>
 													</p>
 												</div>
 											))}
 										</div>
 										<div className="flex items-center justify-between text-xs text-gray-400 pt-3 border-t border-gray-100">
-											<span>Rank <strong className="text-editorial-ink">{actualIndex + 1}</strong> of {standings.length}</span>
-											<span className="font-black text-editorial-green text-sm">
-												<AnimatedScore value={String(standing.total)} /> pts
+											<span>
+												Rank{" "}
+												<strong className="text-editorial-ink">
+													{actualIndex + 1}
+												</strong>{" "}
+												of {standings.length}
 											</span>
+											<div className="flex items-center gap-3">
+												{onViewBreakdown &&
+													standing.teamId && (
+														<button
+															onClick={() =>
+																onViewBreakdown(
+																	standing.teamId!,
+																	standing.team_name,
+																)
+															}
+															className="text-[10px] font-black uppercase tracking-widest text-editorial-gold hover:underline"
+														>
+															📊 Score Breakdown
+														</button>
+													)}
+												<span className="font-black text-editorial-green text-sm">
+													<AnimatedScore
+														value={String(
+															standing.total,
+														)}
+													/>{" "}
+													pts
+												</span>
+											</div>
 										</div>
 									</div>
 								</AnimatedPanel>
@@ -214,14 +340,20 @@ export function QualifiersTable({
 				<div className="pt-4 px-4 md:px-0">
 					<div className="flex items-center justify-start gap-2">
 						<button
-							onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+							onClick={() =>
+								setCurrentPage((p) => Math.max(1, p - 1))
+							}
 							disabled={currentPage === 1}
 							className="flex items-center justify-center w-9 h-9 border-2 border-editorial-ink bg-white hover:bg-editorial-gold disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
 						>
 							<ChevronLeft className="h-4 w-4" />
 						</button>
 						<button
-							onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+							onClick={() =>
+								setCurrentPage((p) =>
+									Math.min(totalPages, p + 1),
+								)
+							}
 							disabled={currentPage === totalPages}
 							className="flex items-center justify-center w-9 h-9 border-2 border-editorial-ink bg-white hover:bg-editorial-gold disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
 						>
@@ -229,7 +361,9 @@ export function QualifiersTable({
 						</button>
 					</div>
 					<p className="text-[10px] text-gray-500 mt-2">
-						{startIndex + 1}–{Math.min(startIndex + itemsPerPage, standings.length)} of {standings.length} teams
+						{startIndex + 1}–
+						{Math.min(startIndex + itemsPerPage, standings.length)}{" "}
+						of {standings.length} teams
 					</p>
 				</div>
 			)}

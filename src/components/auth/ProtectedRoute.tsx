@@ -25,7 +25,7 @@ export function ProtectedRoute({ allowedRoles, children }: ProtectedRouteProps) 
 
 	if (!allowedRoles.includes(role)) {
 		// Logged in but wrong role — send to their default destination
-		const dest = role === "admin" ? "/admin" : "/scorekeeper";
+		const dest = role === "admin" ? "/admin" : role === "referee" ? "/referee" : "/scorekeeper";
 		return <Navigate to={dest} replace />;
 	}
 

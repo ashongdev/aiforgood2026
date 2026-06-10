@@ -1,0 +1,6 @@
+- Allow referees to enter scores directly on their phones instead of passing the sheet to the scorekeeper. Provide them with an optimal interface(if we can prvent typing, maybe by clicks, idk you decide whats best)
+- Teams should be able to see a detailed overview of of their scores, as specified showing in the rulebook(Red to right zone(count), black, etc). So the teams should be able to see what specific mission they completed. The fruits they moved, penalties the incurred and all that.
+- Assign referee to a table
+- Allow volunteers details to be imported. Volunteers are people who are referees, scorekeepers, admins etc.
+- Implement schedule so teams can see when they are up
+- Implement translation

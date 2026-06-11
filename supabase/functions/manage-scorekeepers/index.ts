@@ -38,9 +38,9 @@ async function sendEmail(
   password: string,
   tableNumber: number | null,
   appUrl: string,
-  role: "scorekeeper" | "referee" = "scorekeeper",
+  role: "scorekeeper" | "referee" | "mc" = "scorekeeper",
 ): Promise<boolean> {
-  const roleLabel = role === "referee" ? "Referee" : "Scorekeeper";
+  const roleLabel = role === "referee" ? "Referee" : role === "mc" ? "MC (Master of Ceremonies)" : "Scorekeeper";
   const tableNote = tableNumber
     ? `<p>You have been assigned to <strong>Table ${tableNumber}</strong>.</p>`
     : "";
@@ -131,7 +131,7 @@ Deno.serve(async (req) => {
       const { email, table_number, role: staffRole = "scorekeeper" } = body as {
         email: string;
         table_number: number | null;
-        role?: "scorekeeper" | "referee";
+        role?: "scorekeeper" | "referee" | "mc";
       };
 
       const password = generatePassword();

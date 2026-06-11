@@ -3057,7 +3057,7 @@ function ScoreekeepersTab() {
 	const [addOpen, setAddOpen] = useState(false);
 	const [addEmail, setAddEmail] = useState("");
 	const [addTable, setAddTable] = useState("");
-	const [addRole, setAddRole] = useState<"scorekeeper" | "referee">("scorekeeper");
+	const [addRole, setAddRole] = useState<"scorekeeper" | "referee" | "mc">("scorekeeper");
 	const [isAdding, setIsAdding] = useState(false);
 	const [addError, setAddError] = useState<string | null>(null);
 	const [newCred, setNewCred] = useState<{
@@ -3075,7 +3075,7 @@ function ScoreekeepersTab() {
 	const [lockingId, setLockingId] = useState<string | null>(null);
 
 	// Bulk import state
-	type BulkStaffRow = { email: string; role: "scorekeeper" | "referee"; table_number: string; status: "pending" | "ok" | "error"; message: string };
+	type BulkStaffRow = { email: string; role: "scorekeeper" | "referee" | "mc"; table_number: string; status: "pending" | "ok" | "error"; message: string };
 	const [bulkOpen, setBulkOpen] = useState(false);
 	const [bulkRows, setBulkRows] = useState<BulkStaffRow[]>([]);
 	const [isBulkImporting, setIsBulkImporting] = useState(false);
@@ -3090,7 +3090,7 @@ function ScoreekeepersTab() {
 			const cols = line.split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
 			return {
 				email: cols[0] ?? "",
-				role: (cols[1] === "referee" ? "referee" : "scorekeeper") as "scorekeeper" | "referee",
+				role: (cols[1] === "referee" ? "referee" : cols[1] === "mc" ? "mc" : "scorekeeper") as "scorekeeper" | "referee" | "mc",
 				table_number: cols[2] ?? "",
 				status: "pending" as const,
 				message: "",
@@ -3131,7 +3131,7 @@ function ScoreekeepersTab() {
 		const { data } = await supabase
 			.from("user_profiles")
 			.select("id, email, table_number, created_at, role, locked")
-			.in("role", ["scorekeeper", "referee"])
+			.in("role", ["scorekeeper", "referee", "mc"])
 			.order("created_at", { ascending: false });
 		setScorekeepers((data as ScorekeeperProfile[]) ?? []);
 		setIsLoading(false);
@@ -3322,11 +3322,12 @@ function ScoreekeepersTab() {
 							</label>
 							<select
 								value={addRole}
-								onChange={(e) => setAddRole(e.target.value as "scorekeeper" | "referee")}
+								onChange={(e) => setAddRole(e.target.value as "scorekeeper" | "referee" | "mc")}
 								className="w-full border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:border-editorial-gold text-editorial-ink bg-white"
 							>
 								<option value="scorekeeper">Scorekeeper</option>
 								<option value="referee">Referee</option>
+								<option value="mc">MC</option>
 							</select>
 						</div>
 						<div className="w-32">
@@ -3435,9 +3436,11 @@ function ScoreekeepersTab() {
 										<span className={`text-[10px] font-black uppercase tracking-widest px-1.5 py-0.5 border ${
 											sk.role === "referee"
 												? "text-blue-700 border-blue-200 bg-blue-50"
+												: sk.role === "mc"
+												? "text-purple-700 border-purple-200 bg-purple-50"
 												: "text-gray-500 border-gray-200 bg-gray-50"
 										}`}>
-											{sk.role === "referee" ? "Referee" : "Scorekeeper"}
+											{sk.role === "referee" ? "Referee" : sk.role === "mc" ? "MC" : "Scorekeeper"}
 										</span>
 									</td>
 									<td className="px-4 py-2.5">

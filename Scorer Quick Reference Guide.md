@@ -7,7 +7,8 @@
 1. [Spectator](#spectator)
 2. [Scorekeeper](#scorekeeper)
 3. [Referee](#referee)
-4. [Admin](#admin)
+4. [MC (Master of Ceremonies)](#mc-master-of-ceremonies)
+5. [Admin](#admin)
 
 ---
 
@@ -123,6 +124,48 @@
 
 ---
 
+## MC (Master of Ceremonies)
+
+**Requires login.** You will receive an email with your login credentials from the admin.
+
+The MC view is designed for the person calling teams to the competition floor. It shows all matchups across every phase — no scores, just the pairings and who to call next.
+
+### Logging In
+1. Open the app URL and tap **Sign In**.
+2. Enter the email and password from your credentials email.
+3. You will be redirected automatically to the MC view at `/mc`.
+
+### The MC View
+- Shows **all matches** from all phases (Qualifiers through Finals) in one place.
+- Each match card displays:
+  - **Phase** (e.g. Qualifiers, Semifinals, Finals)
+  - **Table number** — where the match takes place
+  - **Team 1 vs Team 2** — with country flags
+  - **Scheduled time** — if set by the admin
+  - **Status chip** — Upcoming, LIVE (pulsing gold), or Done
+- Completed matches show the winner highlighted in gold.
+
+### Navigation & Filters
+- **Category toggle** (All / Junior / Senior) at the top to focus on one category.
+- **Phase filter** dropdown to narrow down to a specific round.
+- **Search box** to find a specific team instantly — type any part of the team name.
+- Matches are **grouped by phase** for easy scanning.
+
+### Live Banner
+- When any match is actively in progress, a gold banner appears at the top of the page showing: **NOW ON COURT — Team A vs Team B (Table X)**.
+- Use this to confirm which teams are currently competing.
+
+### Calling Teams
+- Use the Phase filter or scroll to find the next upcoming match.
+- Call the two team names as shown on the card and direct them to the listed table number.
+- Once a match is completed, the card shows "Done" and the winner is highlighted — move to the next upcoming card.
+
+### Refreshing
+- Tap the **refresh icon** (top right) to manually reload the latest match data.
+- The view does not auto-refresh continuously — refresh manually before calling each match.
+
+---
+
 ## Admin
 
 **Requires login with an admin account.**
@@ -155,7 +198,7 @@
 
 #### Adding a Single Staff Member
 1. Enter their **email address**.
-2. Select their **role**: Scorekeeper or Referee.
+2. Select their **role**: Scorekeeper, Referee, or **MC**.
 3. Assign a **table number** (optional — referees and scorekeepers default to "all tables" if not set).
 4. Click **Add Staff Member**.
 5. The system creates their account and sends a credentials email automatically.
@@ -169,6 +212,7 @@ email,role,table_number
 alice@example.com,referee,1
 bob@example.com,scorekeeper,2
 carol@example.com,scorekeeper,3
+david@example.com,mc,
 ```
 
 3. Upload the file. A preview table appears.
@@ -211,12 +255,12 @@ carol@example.com,scorekeeper,3
 If setting up for the first time, run these SQL scripts in the **Supabase SQL Editor** before use:
 
 ```sql
--- 1. Add referee role and scheduled_time column
+-- 1. Add referee + MC roles and scheduled_time column
 ALTER TABLE public.user_profiles
   DROP CONSTRAINT IF EXISTS user_profiles_role_check;
 ALTER TABLE public.user_profiles
   ADD CONSTRAINT user_profiles_role_check
-  CHECK (role IN ('admin', 'scorekeeper', 'referee'));
+  CHECK (role IN ('admin', 'scorekeeper', 'referee', 'mc'));
 ALTER TABLE public.matches
   ADD COLUMN IF NOT EXISTS scheduled_time timestamptz;
 

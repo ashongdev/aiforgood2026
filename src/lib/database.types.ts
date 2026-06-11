@@ -1,4 +1,4 @@
-export type Role = 'admin' | 'scorekeeper' | 'referee'
+export type Role = 'admin' | 'scorekeeper' | 'referee' | 'mc'
 export type Category = 'Junior' | 'Senior'
 export type Phase =
   | 'Qualifiers'
@@ -19,7 +19,7 @@ export interface UserProfile {
 
 export interface ScorekeeperProfile {
   id: string
-  role: 'scorekeeper' | 'referee'
+  role: 'scorekeeper' | 'referee' | 'mc'
   table_number: number | null
   email: string | null
   locked: boolean

@@ -726,69 +726,72 @@ export function AdminPage() {
 			{/* Sticky header: top bar + tab bar */}
 			<div className="sticky top-0 z-20">
 				{/* Top bar */}
-				<div className="bg-editorial-ink text-white border-b border-white/10 px-4 py-3 flex items-center gap-3 flex-wrap">
-					<Trophy
-						size={15}
-						className="text-editorial-gold shrink-0"
-					/>
-					<span className="text-xs font-black uppercase tracking-widest mr-auto">
-						Admin Dashboard
-					</span>
-
-					<div className="flex border border-white/20">
-						{(["Junior", "Senior"] as Category[]).map((c) => (
+				<div className="bg-editorial-ink text-white border-b border-white/10 px-4 py-2.5">
+					{/* Row 1: title + action icons */}
+					<div className="flex items-center gap-2">
+						<Trophy size={14} className="text-editorial-gold shrink-0" />
+						<span className="text-xs font-black uppercase tracking-widest flex-1 min-w-0 truncate">
+							Admin Dashboard
+						</span>
+						<div className="flex items-center gap-1 shrink-0">
 							<button
-								key={c}
-								onClick={() => changeCategory(c)}
-								className={`px-4 py-1.5 text-xs font-black uppercase tracking-widest transition-colors ${
-									category === c
-										? "bg-editorial-gold text-editorial-ink"
-										: "text-white/60 hover:text-white"
-								}`}
+								onClick={() => loadData()}
+								className="p-1.5 hover:text-editorial-gold transition-colors"
+								title="Refresh"
 							>
-								{c}
+								<RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
 							</button>
-						))}
+							<a
+								href="/scorekeeper"
+								className="hidden sm:block text-xs text-white/60 hover:text-editorial-gold transition-colors uppercase tracking-widest px-1.5"
+							>
+								Scores
+							</a>
+							<a
+								href="/"
+								className="hidden sm:block text-xs text-white/60 hover:text-editorial-gold transition-colors uppercase tracking-widest px-1.5"
+							>
+								Live
+							</a>
+							<button
+								onClick={async () => { await signOut(); navigate("/login"); }}
+								className="p-1.5 hover:text-editorial-gold transition-colors"
+								title="Sign out"
+							>
+								<LogOut size={14} />
+							</button>
+						</div>
 					</div>
 
-					<button
-						onClick={() => loadData()}
-						className="p-1.5 hover:text-editorial-gold transition-colors"
-						title="Refresh"
-					>
-						<RefreshCw
-							size={14}
-							className={isLoading ? "animate-spin" : ""}
-						/>
-					</button>
-					<a
-						href="/scorekeeper"
-						className="text-xs text-white/60 hover:text-editorial-gold transition-colors uppercase tracking-widest"
-					>
-						Scores
-					</a>
-					<a
-						href="/"
-						className="text-xs text-white/60 hover:text-editorial-gold transition-colors uppercase tracking-widest"
-					>
-						Live
-					</a>
-					<button
-						onClick={async () => {
-							await signOut();
-							navigate("/login");
-						}}
-						className="p-1.5 hover:text-editorial-gold transition-colors"
-					>
-						<LogOut size={14} />
-					</button>
+					{/* Row 2: category toggle + mobile links */}
+					<div className="flex items-center gap-2 mt-2">
+						<div className="flex border border-white/20 shrink-0">
+							{(["Junior", "Senior"] as Category[]).map((c) => (
+								<button
+									key={c}
+									onClick={() => changeCategory(c)}
+									className={`px-3 py-1 text-[11px] font-black uppercase tracking-widest transition-colors ${
+										category === c
+											? "bg-editorial-gold text-editorial-ink"
+											: "text-white/60 hover:text-white"
+									}`}
+								>
+									{c}
+								</button>
+							))}
+						</div>
+						<div className="flex sm:hidden items-center gap-2 ml-auto">
+							<a href="/scorekeeper" className="text-[11px] text-white/60 hover:text-editorial-gold uppercase tracking-widest">Scores</a>
+							<a href="/" className="text-[11px] text-white/60 hover:text-editorial-gold uppercase tracking-widest">Live</a>
+						</div>
+					</div>
 				</div>
 
-				{/* Tab bar */}
-				<div className="bg-editorial-ink border-b-4 border-editorial-gold flex">
+				{/* Tab bar — scrollable on small screens */}
+				<div className="bg-editorial-ink border-b-4 border-editorial-gold flex overflow-x-auto scrollbar-none">
 					<button
 						onClick={() => changeTab("qualifiers")}
-						className={`px-5 py-2.5 text-xs font-black uppercase tracking-widest transition-colors border-r border-white/10 ${
+						className={`shrink-0 px-4 py-2.5 text-xs font-black uppercase tracking-widest transition-colors border-r border-white/10 ${
 							activeTab === "qualifiers"
 								? "bg-editorial-gold text-editorial-ink"
 								: "text-white/60 hover:text-white hover:bg-white/5"
@@ -798,7 +801,7 @@ export function AdminPage() {
 					</button>
 					<button
 						onClick={() => changeTab("bracket")}
-						className={`relative px-5 py-2.5 text-xs font-black uppercase tracking-widest transition-colors ${
+						className={`relative shrink-0 px-4 py-2.5 text-xs font-black uppercase tracking-widest transition-colors border-r border-white/10 ${
 							activeTab === "bracket"
 								? "bg-editorial-gold text-editorial-ink"
 								: "text-white/60 hover:text-white hover:bg-white/5"
@@ -813,7 +816,7 @@ export function AdminPage() {
 					</button>
 					<button
 						onClick={() => changeTab("teams")}
-						className={`flex items-center gap-1.5 px-5 py-2.5 text-xs font-black uppercase tracking-widest transition-colors border-l border-white/10 ${
+						className={`shrink-0 flex items-center gap-1.5 px-4 py-2.5 text-xs font-black uppercase tracking-widest transition-colors border-r border-white/10 ${
 							activeTab === "teams"
 								? "bg-editorial-gold text-editorial-ink"
 								: "text-white/60 hover:text-white hover:bg-white/5"
@@ -823,7 +826,7 @@ export function AdminPage() {
 					</button>
 					<button
 						onClick={() => changeTab("scorekeepers")}
-						className={`flex items-center gap-1.5 px-5 py-2.5 text-xs font-black uppercase tracking-widest transition-colors border-l border-white/10 ${
+						className={`shrink-0 flex items-center gap-1.5 px-4 py-2.5 text-xs font-black uppercase tracking-widest transition-colors ${
 							activeTab === "scorekeepers"
 								? "bg-editorial-gold text-editorial-ink"
 								: "text-white/60 hover:text-white hover:bg-white/5"

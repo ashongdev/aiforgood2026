@@ -8,8 +8,12 @@ interface Match {
 	team2Score: number | null;
 	team1R1: number | null;
 	team1R2: number | null;
+	team1R3?: number | null;
+	team1R4?: number | null;
 	team2R1: number | null;
 	team2R2: number | null;
+	team2R3?: number | null;
+	team2R4?: number | null;
 	winner?: number | null;
 	station: string;
 	isBye?: boolean;
@@ -58,103 +62,72 @@ export function ScoreboardDetail({ match }: ScoreboardDetailProps) {
 
 			{/* Scores Grid */}
 			<div className="grid grid-cols-2 gap-0">
-				{/* Team 1 */}
-				<div className="p-6 pb-8 text-center border-r-2 border-editorial-ink bg-white">
-					<div className="absolute top-3 left-3 text-[8px] font-mono opacity-40 uppercase tracking-widest font-bold">
-						Terminal_A
-					</div>
-					<p className="text-[11px] md:text-[12px] uppercase font-serif font-black italic mb-6 leading-none">
-						{match.team1}
-					</p>
+				{[
+					{
+						name: match.team1,
+						rounds: [match.team1R1, match.team1R2, match.team1R3 ?? null, match.team1R4 ?? null],
+						score: match.team1Score,
+						wins: match.winner === 0,
+						terminal: "Terminal_A",
+						side: "border-r-2 border-editorial-ink bg-white" as const,
+					},
+					{
+						name: match.team2,
+						rounds: [match.team2R1, match.team2R2, match.team2R3 ?? null, match.team2R4 ?? null],
+						score: match.team2Score,
+						wins: match.winner === 1,
+						terminal: "Terminal_B",
+						side: "bg-slate-50/50" as const,
+					},
+				].map((team, ti) => {
+					const scoredRounds = team.rounds
+						.map((s, i) => ({ label: `Round ${i + 1}`, score: s }))
+						.filter(r => r.score !== null);
+					const total = scoredRounds.reduce((sum, r) => sum + (r.score ?? 0), 0);
 
-					{/* Round Scores */}
-					<div className="space-y-4 mb-6">
-						<div className="flex justify-between items-center text-sm">
-							<span className="text-[10px] font-black uppercase tracking-widest text-slate-600">
-								Round 1
-							</span>
-							<span className="font-mono text-lg font-black">
-								{match.team1R1 ?? 0}
-							</span>
-						</div>
-						<div className="flex justify-between items-center text-sm">
-							<span className="text-[10px] font-black uppercase tracking-widest text-slate-600">
-								Round 2
-							</span>
-							<span className="font-mono text-lg font-black">
-								{match.team1R2 ?? 0}
-							</span>
-						</div>
-						<div className="h-[2px] bg-editorial-ink/20 my-4" />
-						<div className="flex justify-between items-center">
-							<span className="text-[10px] font-black uppercase tracking-widest text-editorial-gold">
-								Total
-							</span>
-							<span className="font-mono text-3xl font-black text-editorial-ink">
-								{match.team1Score ? (
-									<AnimatedScore value={match.team1Score} />
-								) : (
-									0
+					return (
+						<div key={ti} className={`p-6 pb-8 text-center ${team.side}`}>
+							<div className={`absolute top-3 ${ti === 0 ? "left-3" : "right-3"} text-[8px] font-mono opacity-40 uppercase tracking-widest font-bold`}>
+								{team.terminal}
+							</div>
+							<p className="text-[11px] md:text-[12px] uppercase font-serif font-black italic mb-6 leading-none">
+								{team.name}
+							</p>
+
+							<div className="space-y-4 mb-6">
+								{scoredRounds.map(({ label, score }) => (
+									<div key={label} className="flex justify-between items-center text-sm">
+										<span className="text-[10px] font-black uppercase tracking-widest text-slate-600">
+											{label}
+										</span>
+										<span className="font-mono text-lg font-black">
+											{score}
+										</span>
+									</div>
+								))}
+								{scoredRounds.length > 0 && (
+									<>
+										<div className="h-0.5 bg-editorial-ink/20 my-4" />
+										<div className="flex justify-between items-center">
+											<span className="text-[10px] font-black uppercase tracking-widest text-editorial-gold">
+												Total
+											</span>
+											<span className="font-mono text-3xl font-black text-editorial-ink">
+												<AnimatedScore value={total} />
+											</span>
+										</div>
+									</>
 								)}
-							</span>
-						</div>
-					</div>
+							</div>
 
-					{match.winner === 0 && (
-						<div className="text-[9px] font-black uppercase tracking-widest bg-editorial-gold text-editorial-ink py-2 px-3">
-							🏆 Winning
+							{team.wins && (
+								<div className="text-[9px] font-black uppercase tracking-widest bg-editorial-gold text-editorial-ink py-2 px-3">
+									🏆 Winning
+								</div>
+							)}
 						</div>
-					)}
-				</div>
-
-				{/* Team 2 */}
-				<div className="p-6 pb-8 text-center bg-slate-50/50">
-					<div className="absolute top-3 right-3 text-[8px] font-mono opacity-40 uppercase tracking-widest font-bold">
-						Terminal_B
-					</div>
-					<p className="text-[11px] md:text-[12px] uppercase font-serif font-black italic mb-6 leading-none">
-						{match.team2}
-					</p>
-
-					{/* Round Scores */}
-					<div className="space-y-4 mb-6">
-						<div className="flex justify-between items-center text-sm">
-							<span className="text-[10px] font-black uppercase tracking-widest text-slate-600">
-								Round 1
-							</span>
-							<span className="font-mono text-lg font-black">
-								{match.team2R1 ?? 0}
-							</span>
-						</div>
-						<div className="flex justify-between items-center text-sm">
-							<span className="text-[10px] font-black uppercase tracking-widest text-slate-600">
-								Round 2
-							</span>
-							<span className="font-mono text-lg font-black">
-								{match.team2R2 ?? 0}
-							</span>
-						</div>
-						<div className="h-[2px] bg-editorial-ink/20 my-4" />
-						<div className="flex justify-between items-center">
-							<span className="text-[10px] font-black uppercase tracking-widest text-editorial-gold">
-								Total
-							</span>
-							<span className="font-mono text-3xl font-black text-editorial-ink">
-								{match.team2Score ? (
-									<AnimatedScore value={match.team2Score} />
-								) : (
-									0
-								)}
-							</span>
-						</div>
-					</div>
-
-					{match.winner === 1 && (
-						<div className="text-[9px] font-black uppercase tracking-widest bg-editorial-gold text-editorial-ink py-2 px-3">
-							🏆 Winning
-						</div>
-					)}
-				</div>
+					);
+				})}
 			</div>
 		</div>
 	);

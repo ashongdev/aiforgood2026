@@ -262,14 +262,30 @@ interface MatchCardProps {
   onRoundTap: (matchId: string, teamSlot: 1 | 2, roundNum: number) => void;
 }
 
+function sumActiveRounds(match: MatchWithTeams, teamSlot: 1 | 2, activeRounds: number): number | null {
+  const rounds = teamSlot === 1
+    ? [match.team_1_r1, match.team_1_r2, match.team_1_r3, match.team_1_r4]
+    : [match.team_2_r1, match.team_2_r2, match.team_2_r3, match.team_2_r4];
+  const vals = rounds.slice(0, activeRounds).filter((v): v is number => v !== null);
+  return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) : null;
+}
+
 function MatchCard({ match, activeRounds, readOnly, saveError, onRoundTap }: MatchCardProps) {
   const breakdown = (match.score_breakdown ?? {}) as Record<string, Record<string, number>>;
-  const t1Total = match.team_1_final_points;
-  const t2Total = match.team_2_final_points;
-  const t1Ahead = (t1Total ?? 0) > (t2Total ?? 0) && (t1Total !== null || t2Total !== null);
-  const t2Ahead = (t2Total ?? 0) > (t1Total ?? 0) && (t1Total !== null || t2Total !== null);
 
   const rounds = Array.from({ length: activeRounds }, (_, i) => i + 1);
+
+  // Compute totals using same access pattern as round buttons
+  const sumRoundCols = (team: 1 | 2): number | null => {
+    const vals = rounds
+      .map(r => (match[`team_${team}_r${r}` as keyof MatchWithTeams] as number | null))
+      .filter((v): v is number => v !== null);
+    return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) : null;
+  };
+  const t1Total = sumRoundCols(1);
+  const t2Total = sumRoundCols(2);
+  const t1Ahead = (t1Total ?? 0) > (t2Total ?? 0) && (t1Total !== null || t2Total !== null);
+  const t2Ahead = (t2Total ?? 0) > (t1Total ?? 0) && (t1Total !== null || t2Total !== null);
 
   return (
     <div className={`rounded-2xl border-2 overflow-hidden bg-white shadow-sm ${saveError ? "border-red-300" : "border-gray-200"}`}>
@@ -504,16 +520,16 @@ export function RefereePage() {
       [key]: breakdown as unknown as Record<string, number>,
     };
 
-    // Build final points for both teams
-    const t1Rounds = [1, 2, 3, 4].map((r, i) => {
+    // Build final points for both teams (i is 0-based index, round col is i+1)
+    const t1Rounds = [0, 1, 2, 3].map((i) => {
       if (i >= activeRounds) return null;
-      if (teamSlot === 1 && roundNum === r + 1) return total;
-      return (match[`team_1_r${r + 1}` as keyof typeof match] as number | null) ?? null;
+      if (teamSlot === 1 && roundNum === i + 1) return total;
+      return (match[`team_1_r${i + 1}` as keyof typeof match] as number | null) ?? null;
     });
-    const t2Rounds = [1, 2, 3, 4].map((r, i) => {
+    const t2Rounds = [0, 1, 2, 3].map((i) => {
       if (i >= activeRounds) return null;
-      if (teamSlot === 2 && roundNum === r + 1) return total;
-      return (match[`team_2_r${r + 1}` as keyof typeof match] as number | null) ?? null;
+      if (teamSlot === 2 && roundNum === i + 1) return total;
+      return (match[`team_2_r${i + 1}` as keyof typeof match] as number | null) ?? null;
     });
 
     const update = {

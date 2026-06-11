@@ -10,8 +10,12 @@ export interface Match {
 	team2Score: number | null;
 	team1R1: number | null;
 	team1R2: number | null;
+	team1R3: number | null;
+	team1R4: number | null;
 	team2R1: number | null;
 	team2R2: number | null;
+	team2R3: number | null;
+	team2R4: number | null;
 	winner: number | null;
 	station: string;
 	isBye?: boolean;
@@ -51,8 +55,12 @@ export function transformSheetDataToMatches(
 					team2Score: null,
 					team1R1: null,
 					team1R2: null,
+					team1R3: null,
+					team1R4: null,
 					team2R1: null,
 					team2R2: null,
+					team2R3: null,
+					team2R4: null,
 					winner: 0, // Team 1 automatically wins a bye
 					station:
 						tableNumber ||
@@ -76,8 +84,12 @@ export function transformSheetDataToMatches(
 				team2Score,
 				team1R1: null,
 				team1R2: null,
+				team1R3: null,
+				team1R4: null,
 				team2R1: null,
 				team2R2: null,
+				team2R3: null,
+				team2R4: null,
 				winner,
 				station: tableNumber || `${String(index + 1).padStart(2, "0")}`,
 				isBye: false,

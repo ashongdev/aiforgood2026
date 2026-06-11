@@ -75,6 +75,11 @@ function computeSpectatorStandings(matches: MatchWithTeams[], rankByTotal = fals
 		.map(([id, e], i) => ({ ...e, teamId: id, rank: i + 1 }));
 }
 
+function sumRounds(...vals: (number | null)[]): number | null {
+	const nums = vals.filter((v): v is number => v !== null);
+	return nums.length > 0 ? nums.reduce((a, b) => a + b, 0) : null;
+}
+
 function toMatch(m: MatchWithTeams): LegacyMatch {
 	return {
 		id: m.id,
@@ -84,12 +89,16 @@ function toMatch(m: MatchWithTeams): LegacyMatch {
 		team2Id: m.team_2_id,
 		team1Country: (m.team_1 as { country?: string | null } | null)?.country ?? null,
 		team2Country: (m.team_2 as { country?: string | null } | null)?.country ?? null,
-		team1Score: m.team_1_final_points,
-		team2Score: m.team_2_final_points,
+		team1Score: sumRounds(m.team_1_r1, m.team_1_r2, m.team_1_r3, m.team_1_r4) ?? m.team_1_final_points,
+		team2Score: sumRounds(m.team_2_r1, m.team_2_r2, m.team_2_r3, m.team_2_r4) ?? m.team_2_final_points,
 		team1R1: m.team_1_r1,
 		team1R2: m.team_1_r2,
+		team1R3: m.team_1_r3,
+		team1R4: m.team_1_r4,
 		team2R1: m.team_2_r1,
 		team2R2: m.team_2_r2,
+		team2R3: m.team_2_r3,
+		team2R4: m.team_2_r4,
 		winner: m.winner_id ? (m.winner_id === m.team_1_id ? 0 : 1) : null,
 		station: m.table_number !== null ? String(m.table_number) : String(m.match_order),
 		isBye: false,
@@ -122,7 +131,7 @@ export default function App() {
 	const [phaseLocks, setPhaseLocks] = useState<Record<string, string>>({});
 	const [selectedMatch, setSelectedMatch] = useState<LegacyMatch | null>(null);
 	const [currentPage, setCurrentPage] = useState<"bracket" | "rules" | "schedule">("bracket");
-	const [breakdownTeam, setBreakdownTeam] = useState<{ id: string; name: string } | null>(null);
+	const [breakdownTeam, setBreakdownTeam] = useState<{ id: string; name: string; phase: string } | null>(null);
 	const { effects, triggerEffect } = useEffects();
 
 	const currentPhase = PHASES[phaseIndex];
@@ -371,7 +380,7 @@ export default function App() {
 											standings={spectatorStandings}
 											advanceCount={phaseAdvanceCount}
 											scoresHidden={lockType === "scores"}
-											onViewBreakdown={(id, name) => setBreakdownTeam({ id, name })}
+											onViewBreakdown={(id, name) => setBreakdownTeam({ id, name, phase: currentPhase })}
 										/>
 									) : matches.length === 0 ? (
 										<div className="text-center py-16 text-sm text-gray-400">
@@ -381,7 +390,7 @@ export default function App() {
 										<BracketList
 											matches={legacyMatches}
 											onSelectMatch={setSelectedMatch}
-											onTeamBreakdown={(id, name) => setBreakdownTeam({ id, name })}
+											onTeamBreakdown={(id, name) => setBreakdownTeam({ id, name, phase: currentPhase })}
 										/>
 									)}
 								</>
@@ -407,6 +416,7 @@ export default function App() {
 			<TeamBreakdownModal
 				teamId={breakdownTeam.id}
 				teamName={breakdownTeam.name}
+				phase={breakdownTeam.phase}
 				category={supabaseCategory}
 				onClose={() => setBreakdownTeam(null)}
 			/>

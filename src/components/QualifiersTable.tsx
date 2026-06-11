@@ -170,11 +170,7 @@ export function QualifiersTable({
 							>
 								{/* Rank badge */}
 								<span
-									className={`w-8 h-8 shrink-0 flex items-center justify-center border-2 font-black text-sm ${
-										isExpanded
-											? "border-white text-white"
-											: "border-editorial-ink text-editorial-ink"
-									}`}
+									className={`w-8 h-8 shrink-0 flex items-center justify-center border-2 font-black text-sm ${isExpanded ? "border-white text-white" : "border-editorial-ink text-editorial-ink"}`}
 								>
 									{actualIndex + 1}
 								</span>
@@ -204,7 +200,6 @@ export function QualifiersTable({
 									</span>
 								) : (
 									<>
-										{/* Round pills */}
 										<span className="hidden sm:flex items-center gap-1 shrink-0">
 											{[
 												standing.r1,
@@ -214,11 +209,7 @@ export function QualifiersTable({
 											].map((score, i) => (
 												<span
 													key={i}
-													className={`inline-flex items-center justify-center w-9 h-7 text-xs font-bold border ${
-														isExpanded
-															? "border-white/40 text-white"
-															: "border-editorial-ink/20 text-editorial-ink"
-													}`}
+													className={`inline-flex items-center justify-center w-9 h-7 text-xs font-bold border ${isExpanded ? "border-white/40 text-white" : "border-editorial-ink/20 text-editorial-ink"}`}
 												>
 													<AnimatedScore
 														value={
@@ -230,16 +221,8 @@ export function QualifiersTable({
 												</span>
 											))}
 										</span>
-
-										{/* Total */}
 										<span
-											className={`shrink-0 w-12 text-right text-sm font-black ${
-												isExpanded
-													? "text-editorial-gold"
-													: standing.total > 0
-														? "text-editorial-green"
-														: "text-gray-400"
-											}`}
+											className={`shrink-0 w-12 text-right text-sm font-black ${isExpanded ? "text-editorial-gold" : standing.total > 0 ? "text-editorial-green" : "text-gray-400"}`}
 										>
 											<AnimatedScore
 												value={String(standing.total)}
@@ -250,7 +233,7 @@ export function QualifiersTable({
 							</button>
 
 							{/* Expanded detail */}
-							{scoresHidden && (
+							{!scoresHidden && (
 								<AnimatedPanel isOpen={isExpanded}>
 									<div className="bg-white border-t border-editorial-ink/10 px-4 py-4">
 										<div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
@@ -312,9 +295,9 @@ export function QualifiersTable({
 																	standing.team_name,
 																)
 															}
-															className="text-[10px] font-black uppercase tracking-widest text-editorial-gold hover:underline"
+															className="text-[10px] font-black uppercase tracking-widest px-2 py-1 bg-editorial-gold text-white hover:bg-editorial-ink transition-colors"
 														>
-															📊 Score Breakdown
+															Score Breakdown
 														</button>
 													)}
 												<span className="font-black text-editorial-green text-sm">

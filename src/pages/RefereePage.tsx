@@ -1,6 +1,6 @@
 import { CloudOff, Lock, Loader2, LogOut, Minus, Plus, RefreshCw, Wifi, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { CustomSelect } from "../components/CustomSelect";
 import { useAuth } from "../contexts/AuthContext";
 import { useOfflineQueue } from "../hooks/useOfflineQueue";
@@ -49,7 +49,7 @@ function ScoringRow({
   return (
     <div className="flex items-center gap-2 py-1.5">
       {/* Icon + label */}
-      <span className="text-lg leading-none w-7 shrink-0 text-center">{item.icon}</span>
+      <span className="text-sm leading-none w-5 shrink-0 text-center">{item.icon}</span>
       <div className="flex-1 min-w-0">
         <span className="text-sm text-editorial-ink leading-tight">{item.label}</span>
       </div>
@@ -342,8 +342,19 @@ function MatchCard({ match, activeRounds, readOnly, saveError, onRoundTap }: Mat
 // ─── Main page ─────────────────────────────────────────────────────────────────
 
 export function RefereePage() {
-  const { profile, signOut } = useAuth();
+  const { profile, isLoading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-editorial-ink flex items-center justify-center">
+        <Loader2 size={32} className="animate-spin text-editorial-gold" />
+      </div>
+    );
+  }
+  if (!profile) {
+    return <Navigate to="/login" replace />;
+  }
   const [searchParams, setSearchParams] = useSearchParams();
 
   // ── Filter state (URL-persisted) ─────────────────────────────────────────

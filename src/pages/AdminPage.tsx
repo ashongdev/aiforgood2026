@@ -829,7 +829,7 @@ export function AdminPage() {
 								: "text-white/60 hover:text-white hover:bg-white/5"
 						}`}
 					>
-						<ShieldCheck size={12} /> Scorekeepers
+						<ShieldCheck size={12} /> Staff
 					</button>
 				</div>
 			</div>

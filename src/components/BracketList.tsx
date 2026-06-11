@@ -28,6 +28,7 @@ interface BracketListProps {
 	sheetName?: string;
 	rankingMap?: Record<string, number>;
 	onSelectMatch: (match: Match) => void;
+	onTeamBreakdown?: (teamId: string, teamName: string) => void;
 }
 
 export function BracketList({
@@ -36,6 +37,7 @@ export function BracketList({
 	sheetName,
 	rankingMap = {},
 	onSelectMatch,
+	onTeamBreakdown,
 }: BracketListProps) {
 	// Check if scoreboard is locked (rawData is passed for bracket phases)
 	if (rawData && isScoreboardLocked(rawData)) {
@@ -65,6 +67,7 @@ export function BracketList({
 							sheetName={sheetName}
 							rankingMap={rankingMap}
 							onClick={() => onSelectMatch(m)}
+							onTeamBreakdown={onTeamBreakdown}
 						/>
 					),
 				)}

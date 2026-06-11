@@ -80,6 +80,8 @@ function toMatch(m: MatchWithTeams): LegacyMatch {
 		id: m.id,
 		team1: m.team_1?.team_name ?? "TBD",
 		team2: m.team_2?.team_name ?? "TBD",
+		team1Id: m.team_1_id,
+		team2Id: m.team_2_id,
 		team1Country: (m.team_1 as { country?: string | null } | null)?.country ?? null,
 		team2Country: (m.team_2 as { country?: string | null } | null)?.country ?? null,
 		team1Score: m.team_1_final_points,
@@ -379,6 +381,7 @@ export default function App() {
 										<BracketList
 											matches={legacyMatches}
 											onSelectMatch={setSelectedMatch}
+											onTeamBreakdown={(id, name) => setBreakdownTeam({ id, name })}
 										/>
 									)}
 								</>

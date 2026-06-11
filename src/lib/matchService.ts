@@ -2,6 +2,8 @@ export interface Match {
 	id: string;
 	team1: string;
 	team2: string;
+	team1Id?: string | null;
+	team2Id?: string | null;
 	team1Country?: string | null;
 	team2Country?: string | null;
 	team1Score: number | null;

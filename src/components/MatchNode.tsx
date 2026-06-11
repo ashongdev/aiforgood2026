@@ -8,6 +8,8 @@ interface MatchNodeProps {
 		id: string;
 		team1: string;
 		team2: string;
+		team1Id?: string | null;
+		team2Id?: string | null;
 		team1Country?: string | null;
 		team2Country?: string | null;
 		team1Score: number | null;
@@ -19,6 +21,7 @@ interface MatchNodeProps {
 	sheetName?: string;
 	rankingMap?: Record<string, number>;
 	onClick: () => void;
+	onTeamBreakdown?: (teamId: string, teamName: string) => void;
 }
 
 export function MatchNode({
@@ -26,6 +29,7 @@ export function MatchNode({
 	sheetName,
 	rankingMap = {},
 	onClick,
+	onTeamBreakdown,
 }: MatchNodeProps) {
 	const handleClick = () => {
 		ReactGA.event({
@@ -74,7 +78,7 @@ export function MatchNode({
 								{getCountryFlag(match.team1Country)}
 							</span>
 						)}
-						<span className="flex items-center gap-2 min-w-0">
+						<span className="flex items-center gap-2 min-w-0 flex-wrap">
 							<span className="font-serif text-2xl font-black italic tracking-tight leading-tight truncate">
 								{match.team1}
 							</span>
@@ -82,6 +86,14 @@ export function MatchNode({
 								<span className="inline-block px-2 py-0.5 bg-editorial-gold text-white text-xs font-black rounded">
 									#{team1Rank}
 								</span>
+							)}
+							{onTeamBreakdown && match.team1Id && (
+								<button
+									onClick={(e) => { e.stopPropagation(); onTeamBreakdown(match.team1Id!, match.team1); }}
+									className="shrink-0 text-[10px] font-black uppercase tracking-widest text-editorial-gold border border-editorial-gold px-1.5 py-0.5 hover:bg-editorial-gold hover:text-white transition-colors"
+								>
+									Stats
+								</button>
 							)}
 						</span>
 					</span>
@@ -117,7 +129,7 @@ export function MatchNode({
 								{getCountryFlag(match.team2Country)}
 							</span>
 						)}
-						<span className="flex items-center gap-2 min-w-0">
+						<span className="flex items-center gap-2 min-w-0 flex-wrap">
 							<span className="font-serif text-2xl font-black italic tracking-tight leading-tight truncate">
 								{match.team2}
 							</span>
@@ -125,6 +137,14 @@ export function MatchNode({
 								<span className="inline-block px-2 py-0.5 bg-editorial-gold text-white text-xs font-black rounded">
 									#{team2Rank}
 								</span>
+							)}
+							{onTeamBreakdown && match.team2Id && (
+								<button
+									onClick={(e) => { e.stopPropagation(); onTeamBreakdown(match.team2Id!, match.team2); }}
+									className="shrink-0 text-[10px] font-black uppercase tracking-widest text-editorial-gold border border-editorial-gold px-1.5 py-0.5 hover:bg-editorial-gold hover:text-white transition-colors"
+								>
+									Stats
+								</button>
 							)}
 						</span>
 					</span>

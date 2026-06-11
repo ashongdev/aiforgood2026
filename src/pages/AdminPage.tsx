@@ -2165,26 +2165,12 @@ function TeamsTab({
 
 											{/* Category */}
 											<td>
-												<select
-													data-bulk-row={rowIndex}
-													data-bulk-col={1}
+												<CustomSelect
 													value={row.category}
-													onChange={(e) =>
-														handleBulkChange(
-															rowIndex,
-															"category",
-															e.target.value,
-														)
-													}
-													className="w-full px-3 py-2 bg-transparent text-sm font-semibold focus:outline-none focus:bg-editorial-gold/10 appearance-none cursor-pointer"
-												>
-													<option value="Junior">
-														Junior
-													</option>
-													<option value="Senior">
-														Senior
-													</option>
-												</select>
+													options={[{ value: "Junior", label: "Junior" }, { value: "Senior", label: "Senior" }]}
+													onChange={(v) => handleBulkChange(rowIndex, "category", v)}
+													showSearch={false}
+												/>
 											</td>
 
 											{/* Country */}
@@ -3320,15 +3306,16 @@ function ScoreekeepersTab() {
 							<label className="text-[10px] uppercase tracking-widest font-black text-gray-400 mb-1 block">
 								Role *
 							</label>
-							<select
+							<CustomSelect
 								value={addRole}
-								onChange={(e) => setAddRole(e.target.value as "scorekeeper" | "referee" | "mc")}
-								className="w-full border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:border-editorial-gold text-editorial-ink bg-white"
-							>
-								<option value="scorekeeper">Scorekeeper</option>
-								<option value="referee">Referee</option>
-								<option value="mc">MC</option>
-							</select>
+								options={[
+									{ value: "scorekeeper", label: "Scorekeeper" },
+									{ value: "referee", label: "Referee" },
+									{ value: "mc", label: "MC" },
+								]}
+								onChange={(v) => setAddRole(v as "scorekeeper" | "referee" | "mc")}
+								showSearch={false}
+							/>
 						</div>
 						<div className="w-32">
 							<label className="text-[10px] uppercase tracking-widest font-black text-gray-400 mb-1 block">
@@ -3607,15 +3594,13 @@ function ScoreekeepersTab() {
 										<tr key={i} className={row.status === "ok" ? "bg-green-50/40" : row.status === "error" ? "bg-red-50/40" : ""}>
 											<td className="px-3 py-2 text-editorial-ink">{row.email}</td>
 											<td className="px-3 py-2">
-												<select
+												<CustomSelect
 													value={row.role}
 													disabled={isBulkImporting || row.status === "ok"}
-													onChange={(e) => setBulkRows((prev) => prev.map((r, idx) => idx === i ? { ...r, role: e.target.value as "scorekeeper" | "referee" } : r))}
-													className="border border-gray-200 px-1 py-0.5 text-xs bg-white disabled:opacity-60"
-												>
-													<option value="scorekeeper">Scorekeeper</option>
-													<option value="referee">Referee</option>
-												</select>
+													options={[{ value: "scorekeeper", label: "Scorekeeper" }, { value: "referee", label: "Referee" }]}
+													onChange={(v) => setBulkRows((prev) => prev.map((r, idx) => idx === i ? { ...r, role: v as "scorekeeper" | "referee" } : r))}
+													showSearch={false}
+												/>
 											</td>
 											<td className="px-3 py-2">
 												<input

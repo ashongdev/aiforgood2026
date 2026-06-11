@@ -29,6 +29,7 @@ interface CustomSelectProps {
 	 */
 	defaultValue?: string;
 	className?: string;
+	disabled?: boolean;
 }
 
 export function CustomSelect({
@@ -40,6 +41,7 @@ export function CustomSelect({
 	showSearch,
 	defaultValue,
 	className = "",
+	disabled = false,
 }: CustomSelectProps) {
 	const [open, setOpen] = useState(false);
 	const [query, setQuery] = useState("");
@@ -79,8 +81,9 @@ export function CustomSelect({
 	const triggerBase =
 		"flex items-center gap-1.5 px-2 h-[30px] text-xs font-semibold focus:outline-none cursor-pointer transition-colors w-full text-left";
 
-	const triggerTheme =
-		theme === "dark"
+	const triggerTheme = disabled
+		? "border border-gray-200 bg-gray-50 text-gray-300 cursor-not-allowed"
+		: theme === "dark"
 			? "border border-white/30 bg-white/10 text-white hover:border-white/50"
 			: isActive
 				? "border border-editorial-gold bg-editorial-gold/5 text-editorial-ink"
@@ -94,6 +97,7 @@ export function CustomSelect({
 			<button
 				type="button"
 				onClick={() => {
+					if (disabled) return;
 					const next = !open;
 					setOpen(next);
 					if (next && shouldShowSearch) {

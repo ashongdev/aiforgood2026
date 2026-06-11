@@ -3,6 +3,7 @@ import { LogOut, Mic, RefreshCw, Search, Loader2 } from "lucide-react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
+import { CustomSelect } from "../components/CustomSelect";
 import { getCountryFlag } from "../lib/countryFlag";
 import type { Category, MatchWithTeams, Phase } from "../lib/database.types";
 
@@ -314,16 +315,13 @@ export function MCPage() {
 					</div>
 
 					{/* Phase filter */}
-					<select
+					<CustomSelect
 						value={phaseFilter}
-						onChange={(e) => setPhaseFilter(e.target.value as Phase | "All")}
-						className="border-2 border-editorial-ink/20 px-3 py-2 text-sm focus:outline-none focus:border-editorial-gold bg-white text-editorial-ink"
-					>
-						<option value="All">All Phases</option>
-						{PHASES.map((p) => (
-							<option key={p} value={p}>{p}</option>
-						))}
-					</select>
+						options={[{ value: "All", label: "All Phases" }, ...PHASES.map(p => ({ value: p, label: p }))]}
+						onChange={(v) => setPhaseFilter(v as Phase | "All")}
+						showSearch={false}
+						defaultValue="All"
+					/>
 				</div>
 
 				{/* ── Matches ──────────────────────────────────────────── */}

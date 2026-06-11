@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -9,6 +10,7 @@ export function LoginPage() {
 	const [password, setPassword] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [isSubmitting, setIsSubmitting] = useState(false);
+	const [showPwd, setShowPwd] = useState(false);
 
 	// Redirect if already logged in
 	if (!isLoading && role) {
@@ -85,15 +87,26 @@ export function LoginPage() {
 						>
 							Password
 						</label>
-						<input
-							id="password"
-							type="password"
-							autoComplete="current-password"
-							required
-							value={password}
-							onChange={(e) => setPassword(e.target.value)}
-							className="w-full border-2 border-editorial-ink px-3 py-2 text-sm font-medium text-editorial-ink bg-editorial-bg focus:outline-none focus:border-editorial-gold focus:bg-white transition-colors"
-						/>
+						<div className="relative">
+							<input
+								id="password"
+								type={showPwd ? "text" : "password"}
+								autoComplete="current-password"
+								required
+								value={password}
+								onChange={(e) => setPassword(e.target.value)}
+								className="w-full border-2 border-editorial-ink px-3 py-2 pr-10 text-sm font-medium text-editorial-ink bg-editorial-bg focus:outline-none focus:border-editorial-gold focus:bg-white transition-colors"
+							/>
+							<button
+								type="button"
+								onClick={() => setShowPwd(v => !v)}
+								className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-editorial-ink transition-colors"
+								tabIndex={-1}
+								aria-label={showPwd ? "Hide password" : "Show password"}
+							>
+								{showPwd ? <EyeOff size={15} /> : <Eye size={15} />}
+							</button>
+						</div>
 					</div>
 
 					{error && (

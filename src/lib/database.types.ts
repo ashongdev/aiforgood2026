@@ -23,6 +23,7 @@ export interface ScorekeeperProfile {
   table_number: number | null
   email: string | null
   locked: boolean
+  temp_password: string | null
   created_at: string
 }
 

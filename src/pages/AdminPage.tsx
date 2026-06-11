@@ -13,6 +13,7 @@ import {
 	Pencil,
 	Plus,
 	RefreshCw,
+	RotateCcw,
 	Search,
 	ShieldCheck,
 	Trash2,
@@ -21,7 +22,7 @@ import {
 	Upload,
 	Users,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import type { SelectOption } from "../components/CustomSelect";
 import { CustomSelect } from "../components/CustomSelect";
@@ -3059,6 +3060,14 @@ function ScoreekeepersTab() {
 	const [editTable, setEditTable] = useState("");
 	const [isSavingEdit, setIsSavingEdit] = useState(false);
 	const [lockingId, setLockingId] = useState<string | null>(null);
+	const [revealPwdId, setRevealPwdId] = useState<string | null>(null);
+	const [pwdVisible, setPwdVisible] = useState<Record<string, boolean>>({});
+	const [resettingPwdId, setResettingPwdId] = useState<string | null>(null);
+	const [rowCopied, setRowCopied] = useState<string | null>(null);
+	const [staffSearchOpen, setStaffSearchOpen] = useState(false);
+	const [staffQuery, setStaffQuery] = useState("");
+	const [staffRoleFilter, setStaffRoleFilter] = useState<"" | "scorekeeper" | "referee" | "mc">("");
+	const [staffTableFilter, setStaffTableFilter] = useState("");
 
 	// Bulk import state
 	type BulkStaffRow = { email: string; role: "scorekeeper" | "referee" | "mc"; table_number: string; status: "pending" | "ok" | "error"; message: string };
@@ -3202,6 +3211,28 @@ function ScoreekeepersTab() {
 		navigator.clipboard.writeText(`Email: ${email}\nPassword: ${password}`);
 		setCopied(true);
 		setTimeout(() => setCopied(false), 2000);
+	}
+
+	function copyRowCredentials(id: string, email: string, password: string) {
+		navigator.clipboard.writeText(`Email: ${email}\nPassword: ${password}`);
+		setRowCopied(id);
+		setTimeout(() => setRowCopied(null), 2000);
+	}
+
+	async function handleResetPassword(userId: string, email: string, role: string) {
+		setResettingPwdId(userId);
+		const { data, error } = await supabase.functions.invoke("manage-scorekeepers", {
+			body: { action: "resetPassword", userId, email, role },
+		});
+		setResettingPwdId(null);
+		if (!error && !(data as { error?: string })?.error) {
+			const newPwd = (data as { password: string }).password;
+			setScorekeepers(prev => prev.map(sk =>
+				sk.id === userId ? { ...sk, temp_password: newPwd } : sk
+			));
+			setPwdVisible(prev => ({ ...prev, [userId]: true }));
+			setRevealPwdId(userId);
+		}
 	}
 
 	return (
@@ -3356,16 +3387,79 @@ function ScoreekeepersTab() {
 					<span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
 						Staff ({scorekeepers.length})
 					</span>
-					<button
-						onClick={loadScorekeepers}
-						className="text-gray-400 hover:text-editorial-ink transition-colors p-1"
-					>
-						<RefreshCw
-							size={12}
-							className={isLoading ? "animate-spin" : ""}
-						/>
-					</button>
+					<div className="flex items-center gap-1">
+						<button
+							onClick={() => {
+								setStaffSearchOpen(v => !v);
+								if (staffSearchOpen) {
+									setStaffQuery("");
+									setStaffRoleFilter("");
+									setStaffTableFilter("");
+								}
+							}}
+							className={`p-1 transition-colors ${staffSearchOpen ? "text-editorial-gold" : "text-gray-400 hover:text-editorial-ink"}`}
+							title="Search staff"
+						>
+							<Search size={12} />
+						</button>
+						<button
+							onClick={loadScorekeepers}
+							className="text-gray-400 hover:text-editorial-ink transition-colors p-1"
+						>
+							<RefreshCw
+								size={12}
+								className={isLoading ? "animate-spin" : ""}
+							/>
+						</button>
+					</div>
 				</div>
+
+				{staffSearchOpen && (
+					<div className="px-4 py-3 border-b border-gray-100 bg-gray-50/40 flex flex-wrap gap-3 items-end">
+						<div className="flex-1 min-w-40 space-y-1">
+							<label className="block text-[10px] font-black uppercase tracking-widest text-gray-400">Email</label>
+							<input
+								type="text"
+								placeholder="Search by email…"
+								value={staffQuery}
+								onChange={e => setStaffQuery(e.target.value)}
+								autoFocus
+								className="w-full border border-gray-200 px-2.5 py-1.5 text-xs focus:outline-none focus:border-editorial-gold text-editorial-ink placeholder:text-gray-300"
+							/>
+						</div>
+						<div className="space-y-1">
+							<label className="block text-[10px] font-black uppercase tracking-widest text-gray-400">Role</label>
+							<select
+								value={staffRoleFilter}
+								onChange={e => setStaffRoleFilter(e.target.value as typeof staffRoleFilter)}
+								className="border border-gray-200 px-2.5 py-1.5 text-xs focus:outline-none focus:border-editorial-gold text-editorial-ink bg-white"
+							>
+								<option value="">All roles</option>
+								<option value="scorekeeper">Scorekeeper</option>
+								<option value="referee">Referee</option>
+								<option value="mc">MC</option>
+							</select>
+						</div>
+						<div className="space-y-1">
+							<label className="block text-[10px] font-black uppercase tracking-widest text-gray-400">Table</label>
+							<input
+								type="number"
+								placeholder="Any"
+								value={staffTableFilter}
+								onChange={e => setStaffTableFilter(e.target.value)}
+								className="w-20 border border-gray-200 px-2.5 py-1.5 text-xs focus:outline-none focus:border-editorial-gold text-editorial-ink placeholder:text-gray-300"
+							/>
+						</div>
+						{(staffQuery || staffRoleFilter || staffTableFilter) && (
+							<button
+								onClick={() => { setStaffQuery(""); setStaffRoleFilter(""); setStaffTableFilter(""); }}
+								className="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-red-500 transition-colors pb-1.5"
+							>
+								Clear
+							</button>
+						)}
+					</div>
+				)}
 
 				{isLoading ? (
 					<div className="py-10 text-center text-sm text-gray-400">
@@ -3395,9 +3489,14 @@ function ScoreekeepersTab() {
 							</tr>
 						</thead>
 						<tbody className="divide-y divide-gray-100">
-							{scorekeepers.map((sk) => (
+							{scorekeepers.filter(sk => {
+								if (staffQuery && !(sk.email ?? "").toLowerCase().includes(staffQuery.toLowerCase())) return false;
+								if (staffRoleFilter && sk.role !== staffRoleFilter) return false;
+								if (staffTableFilter && String(sk.table_number ?? "") !== staffTableFilter) return false;
+								return true;
+							}).map((sk) => (
+								<Fragment key={sk.id}>
 								<tr
-									key={sk.id}
 									className={`hover:bg-gray-50/60 ${sk.locked ? "bg-red-50/40" : ""}`}
 								>
 									<td className="px-4 py-2.5">
@@ -3547,10 +3646,83 @@ function ScoreekeepersTab() {
 											>
 												<Trash2 size={13} />
 											</button>
+											<button
+												onClick={() => setRevealPwdId(revealPwdId === sk.id ? null : sk.id)}
+												className={`p-1.5 transition-colors ${revealPwdId === sk.id ? "text-editorial-gold" : "text-gray-400 hover:text-editorial-ink"}`}
+												title="Show password"
+											>
+												{revealPwdId === sk.id ? <EyeOff size={13} /> : <Eye size={13} />}
+											</button>
 										</div>
 									</td>
 								</tr>
+								{revealPwdId === sk.id && (
+									<tr className="bg-editorial-ink/[0.03] border-b border-gray-100">
+										<td colSpan={5} className="px-4 py-3">
+											{sk.temp_password ? (
+												<div className="flex items-center gap-3 flex-wrap">
+													<span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Password</span>
+													<span className="font-mono text-sm text-editorial-ink font-semibold tracking-wider">
+														{pwdVisible[sk.id] ? sk.temp_password : "•".repeat(sk.temp_password.length)}
+													</span>
+													<button
+														onClick={() => setPwdVisible(prev => ({ ...prev, [sk.id]: !prev[sk.id] }))}
+														className="p-1 text-gray-400 hover:text-editorial-ink transition-colors"
+														title={pwdVisible[sk.id] ? "Hide" : "Reveal"}
+													>
+														{pwdVisible[sk.id] ? <EyeOff size={12} /> : <Eye size={12} />}
+													</button>
+													<button
+														onClick={() => copyRowCredentials(sk.id, sk.email ?? "", sk.temp_password!)}
+														className="flex items-center gap-1 text-xs px-2 py-1 border border-gray-200 hover:border-editorial-gold hover:bg-editorial-gold/5 transition-colors"
+													>
+														<Copy size={10} />
+														{rowCopied === sk.id ? "Copied!" : "Copy"}
+													</button>
+													<button
+														onClick={() => handleResetPassword(sk.id, sk.email ?? "", sk.role)}
+														disabled={resettingPwdId === sk.id}
+														className="flex items-center gap-1 text-xs px-2 py-1 border border-gray-200 text-gray-500 hover:border-editorial-ink hover:text-editorial-ink transition-colors disabled:opacity-40"
+														title="Generate a new password"
+													>
+														{resettingPwdId === sk.id ? <Loader2 size={10} className="animate-spin" /> : <RotateCcw size={10} />}
+														{resettingPwdId === sk.id ? "Resetting…" : "Reset"}
+													</button>
+													<span className="text-[10px] text-gray-300 ml-auto">Last admin-issued password · may be stale if user changed it</span>
+												</div>
+											) : (
+												<div className="flex items-center gap-3">
+													<span className="text-xs text-gray-400 italic">No password stored.</span>
+													<button
+														onClick={() => handleResetPassword(sk.id, sk.email ?? "", sk.role)}
+														disabled={resettingPwdId === sk.id}
+														className="flex items-center gap-1 text-xs px-2 py-1 border border-editorial-ink text-editorial-ink hover:bg-editorial-gold hover:border-editorial-gold transition-colors disabled:opacity-40"
+													>
+														{resettingPwdId === sk.id ? <Loader2 size={10} className="animate-spin" /> : <RotateCcw size={10} />}
+														{resettingPwdId === sk.id ? "Generating…" : "Generate & Set Password"}
+													</button>
+												</div>
+											)}
+										</td>
+									</tr>
+								)}
+								</Fragment>
 							))}
+							{scorekeepers.length > 0 && (() => {
+								const filtered = scorekeepers.filter(sk => {
+									if (staffQuery && !(sk.email ?? "").toLowerCase().includes(staffQuery.toLowerCase())) return false;
+									if (staffRoleFilter && sk.role !== staffRoleFilter) return false;
+									if (staffTableFilter && String(sk.table_number ?? "") !== staffTableFilter) return false;
+									return true;
+								});
+								return filtered.length === 0 ? (
+									<tr>
+										<td colSpan={5} className="px-4 py-8 text-center text-sm text-gray-400 italic">
+											No staff match your filters.
+										</td>
+									</tr>
+								) : null;
+							})()}
 						</tbody>
 					</table>
 				)}

@@ -155,6 +155,7 @@ Deno.serve(async (req) => {
         role: staffRole,
         table_number: table_number ?? null,
         email,
+        temp_password: password,
       });
 
       let emailSent = false;
@@ -183,6 +184,38 @@ Deno.serve(async (req) => {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         },
+      );
+    }
+
+    // ── Reset Password ─────────────────────────────────────────────────────────
+    if (action === "resetPassword") {
+      const { userId, email, role: staffRole = "scorekeeper" } = body as {
+        userId: string;
+        email: string;
+        role?: "scorekeeper" | "referee" | "mc";
+      };
+
+      const password = generatePassword();
+
+      const { error: updateError } = await adminClient.auth.admin.updateUserById(userId, { password });
+      if (updateError) {
+        return new Response(JSON.stringify({ error: updateError.message }), {
+          status: 400, headers: corsHeaders,
+        });
+      }
+
+      await adminClient.from("user_profiles").update({ temp_password: password }).eq("id", userId);
+
+      let emailSent = false;
+      const resendKey = Deno.env.get("RESEND_API_KEY");
+      if (resendKey && email) {
+        const appUrl = Deno.env.get("APP_URL") ?? "https://your-app.vercel.app";
+        emailSent = await sendEmail(resendKey, email, email, password, null, appUrl, staffRole);
+      }
+
+      return new Response(
+        JSON.stringify({ password, emailSent }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 

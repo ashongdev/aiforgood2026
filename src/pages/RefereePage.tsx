@@ -452,6 +452,16 @@ export function RefereePage() {
 
   // ── Data fetching ─────────────────────────────────────────────────────────
 
+  function maxScoredRound(rows: MatchWithTeams[]): number {
+    let max = 1;
+    for (const m of rows) {
+      if (m.team_1_r4 !== null || m.team_2_r4 !== null) { max = 4; break; }
+      if (m.team_1_r3 !== null || m.team_2_r3 !== null) max = Math.max(max, 3);
+      else if (m.team_1_r2 !== null || m.team_2_r2 !== null) max = Math.max(max, 2);
+    }
+    return max;
+  }
+
   async function loadMatches() {
     setIsLoading(true);
     const { data, error } = await supabase
@@ -460,7 +470,11 @@ export function RefereePage() {
       .eq("phase", phase)
       .eq("category", category)
       .order("match_order", { ascending: true });
-    if (!error) setMatches((data as MatchWithTeams[]) ?? []);
+    if (!error) {
+      const rows = (data as MatchWithTeams[]) ?? [];
+      setMatches(rows);
+      if (!isQualifiers) setElimActiveRounds(n => Math.max(n, maxScoredRound(rows)));
+    }
     setIsLoading(false);
   }
 
@@ -476,6 +490,14 @@ export function RefereePage() {
         payload => {
           if (payload.eventType === "UPDATE") {
             setMatches(prev => prev.map(m => m.id === payload.new.id ? { ...m, ...(payload.new as MatchWithTeams) } : m));
+            if (!isQualifiers) {
+              const n = payload.new as Partial<MatchWithTeams>;
+              const incomingMax = (n.team_1_r4 != null || n.team_2_r4 != null) ? 4
+                : (n.team_1_r3 != null || n.team_2_r3 != null) ? 3
+                : (n.team_1_r2 != null || n.team_2_r2 != null) ? 2
+                : 1;
+              setElimActiveRounds(prev => Math.max(prev, incomingMax));
+            }
           }
         })
       .subscribe();
@@ -556,6 +578,7 @@ export function RefereePage() {
       setMatches(prev => prev.map(m => m.id === matchId ? { ...m, [roundCol]: match[roundCol as keyof typeof match] } : m));
     } else {
       setSaveError(prev => { const n = { ...prev }; delete n[matchId]; return n; });
+      if (!isQualifiers) setElimActiveRounds(prev => Math.max(prev, roundNum));
     }
   }
 

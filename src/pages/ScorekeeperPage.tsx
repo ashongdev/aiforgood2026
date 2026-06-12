@@ -7,6 +7,7 @@ import { useEdgeColumnResize } from "../hooks/useEdgeColumnResize";
 import { useOfflineQueue } from "../hooks/useOfflineQueue";
 import type { Category, MatchWithTeams, Phase } from "../lib/database.types";
 import { supabase } from "../lib/supabase";
+import { tc } from "../lib/format";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -850,7 +851,7 @@ function QualifiersGrid({
 							{/* Team 1 name */}
 							<td className="px-3 py-1.5">
 								<span className="text-sm font-semibold truncate block max-w-[160px]">
-									{match.team_1?.team_name ?? (
+									{tc(match.team_1?.team_name) || (
 										<span className="text-gray-300 font-normal italic">
 											Empty slot
 										</span>
@@ -908,7 +909,7 @@ function QualifiersGrid({
 							{/* Team 2 name */}
 							<td className="px-3 py-1.5">
 								<span className="text-sm font-semibold truncate block max-w-[160px]">
-									{match.team_2?.team_name ?? (
+									{tc(match.team_2?.team_name) || (
 										<span className="text-gray-300 font-normal italic">
 											Empty slot
 										</span>
@@ -1141,7 +1142,7 @@ function EliminationGrid({
 								<span
 									className={`text-sm font-semibold truncate block max-w-[160px] ${t1IsAhead ? "text-editorial-green" : ""}`}
 								>
-									{match.team_1?.team_name ?? (
+									{tc(match.team_1?.team_name) || (
 										<span className="text-gray-300 font-normal italic">
 											Empty slot
 										</span>
@@ -1187,7 +1188,7 @@ function EliminationGrid({
 								<span
 									className={`text-sm font-semibold truncate block max-w-[160px] ${t2IsAhead ? "text-editorial-green" : ""}`}
 								>
-									{match.team_2?.team_name ?? (
+									{tc(match.team_2?.team_name) || (
 										<span className="text-gray-300 font-normal italic">
 											Empty slot
 										</span>

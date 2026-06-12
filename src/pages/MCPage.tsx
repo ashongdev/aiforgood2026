@@ -5,6 +5,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
 import { CustomSelect } from "../components/CustomSelect";
 import { getCountryFlag } from "../lib/countryFlag";
+import { tc } from "../lib/format";
 import type { Category, MatchWithTeams, Phase } from "../lib/database.types";
 
 const PHASES: Phase[] = [
@@ -112,7 +113,7 @@ function MatchCard({ match }: { match: MatchWithTeams }) {
 								</span>
 							)}
 							<span className="text-base font-black text-editorial-ink leading-tight">
-								{team1.team_name}
+								{tc(team1.team_name)}
 							</span>
 							{t1Wins && (
 								<span className="text-[9px] font-black uppercase tracking-widest text-editorial-gold mt-0.5">
@@ -142,7 +143,7 @@ function MatchCard({ match }: { match: MatchWithTeams }) {
 								</span>
 							)}
 							<span className="text-base font-black text-editorial-ink leading-tight">
-								{team2.team_name}
+								{tc(team2.team_name)}
 							</span>
 							{t2Wins && (
 								<span className="text-[9px] font-black uppercase tracking-widest text-editorial-gold mt-0.5">

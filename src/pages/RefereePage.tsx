@@ -11,6 +11,7 @@ import {
   type RoundBreakdown, type ScoringItem,
 } from "../lib/scoring";
 import { supabase } from "../lib/supabase";
+import { tc } from "../lib/format";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -301,7 +302,7 @@ function MatchCard({ match, activeRounds, readOnly, saveError, onRoundTap }: Mat
       <div className={`px-4 pt-4 pb-3 ${t1Ahead ? "bg-emerald-50/40" : ""}`}>
         <div className="flex items-center justify-between mb-2">
           <span className={`text-lg font-black leading-tight ${t1Ahead ? "text-emerald-700" : "text-editorial-ink"}`}>
-            {match.team_1?.team_name ?? <span className="font-normal italic text-gray-300 text-base">Empty slot</span>}
+            {tc(match.team_1?.team_name) || <span className="font-normal italic text-gray-300 text-base">Empty slot</span>}
           </span>
           <span className={`text-2xl font-black font-mono ${t1Total !== null ? "text-emerald-600" : "text-gray-200"}`}>
             {t1Total ?? "—"}
@@ -344,7 +345,7 @@ function MatchCard({ match, activeRounds, readOnly, saveError, onRoundTap }: Mat
         </div>
         <div className="flex items-center justify-between">
           <span className={`text-lg font-black leading-tight ${t2Ahead ? "text-emerald-700" : "text-editorial-ink"}`}>
-            {match.team_2?.team_name ?? <span className="font-normal italic text-gray-300 text-base">Empty slot</span>}
+            {tc(match.team_2?.team_name) || <span className="font-normal italic text-gray-300 text-base">Empty slot</span>}
           </span>
           <span className={`text-2xl font-black font-mono ${t2Total !== null ? "text-emerald-600" : "text-gray-200"}`}>
             {t2Total ?? "—"}
@@ -526,7 +527,7 @@ export function RefereePage() {
       ? { ...EMPTY_BREAKDOWN, ...(existing as unknown as Partial<RoundBreakdown>) }
       : { ...EMPTY_BREAKDOWN };
 
-    setPanel({ matchId, teamSlot, roundNum, teamName: team.team_name, breakdown });
+    setPanel({ matchId, teamSlot, roundNum, teamName: tc(team.team_name), breakdown });
   }
 
   async function handleSave(breakdown: RoundBreakdown, total: number) {

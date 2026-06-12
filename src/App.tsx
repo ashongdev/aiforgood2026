@@ -17,6 +17,7 @@ import { TeamBreakdownModal } from "./components/TeamBreakdownModal";
 import { TeamShowcase } from "./components/TeamShowcase";
 import { useEffects } from "./hooks/useEffects";
 import { supabase } from "./lib/supabase";
+import { tc } from "./lib/format";
 import type { Category, MatchWithTeams, Phase, Team } from "./lib/database.types";
 import type { Match as LegacyMatch } from "./lib/matchService";
 
@@ -51,7 +52,7 @@ function computeSpectatorStandings(matches: MatchWithTeams[], rankByTotal = fals
 	) {
 		if (!id || !team) return;
 		const scored = [r1, r2, r3, r4].filter((v): v is number => v !== null && v > 0);
-		const e = map.get(id) ?? { team_name: team.team_name, country: team.country ?? null, r1: null, r2: null, r3: null, r4: null, best_round: 0, total: 0 };
+		const e = map.get(id) ?? { team_name: tc(team.team_name), country: tc(team.country), r1: null, r2: null, r3: null, r4: null, best_round: 0, total: 0 };
 		if (e.r1 === null && r1 !== null) e.r1 = r1;
 		if (e.r2 === null && r2 !== null) e.r2 = r2;
 		if (e.r3 === null && r3 !== null) e.r3 = r3;
@@ -83,8 +84,8 @@ function sumRounds(...vals: (number | null)[]): number | null {
 function toMatch(m: MatchWithTeams): LegacyMatch {
 	return {
 		id: m.id,
-		team1: m.team_1?.team_name ?? "TBD",
-		team2: m.team_2?.team_name ?? "TBD",
+		team1: tc(m.team_1?.team_name) || "TBD",
+		team2: tc(m.team_2?.team_name) || "TBD",
 		team1Id: m.team_1_id,
 		team2Id: m.team_2_id,
 		team1Country: (m.team_1 as { country?: string | null } | null)?.country ?? null,

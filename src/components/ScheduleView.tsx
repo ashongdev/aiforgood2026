@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Calendar, Search } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { tc } from "../lib/format";
 import type { Category, MatchWithTeams } from "../lib/database.types";
 
 type ScheduleStatus = "upcoming" | "live" | "done";
@@ -88,8 +89,8 @@ export function ScheduleView({ category }: { category: Category }) {
 						Next up
 					</span>
 					<span className="text-sm font-semibold text-editorial-ink">
-						{nextUpMatch.team_1?.team_name ?? "TBD"} vs{" "}
-						{nextUpMatch.team_2?.team_name ?? "TBD"}
+						{tc(nextUpMatch.team_1?.team_name) || "TBD"} vs{" "}
+						{tc(nextUpMatch.team_2?.team_name) || "TBD"}
 					</span>
 					<span className="text-xs text-gray-500 ml-auto shrink-0">
 						{new Date(nextUpMatch.scheduled_time!).toLocaleString([], {
@@ -150,17 +151,17 @@ export function ScheduleView({ category }: { category: Category }) {
 								{/* Teams */}
 								<div className="flex-1 min-w-0 flex items-center gap-2">
 									<span className={`flex-1 truncate font-semibold ${highlight1 ? "text-editorial-gold" : "text-editorial-ink"}`}>
-										{m.team_1?.team_name ?? "TBD"}
+										{tc(m.team_1?.team_name) || "TBD"}
 									</span>
 									<span className="text-xs text-gray-300 shrink-0">vs</span>
 									<span className={`flex-1 truncate font-semibold text-right ${highlight2 ? "text-editorial-gold" : "text-editorial-ink"}`}>
-										{m.team_2?.team_name ?? "TBD"}
+										{tc(m.team_2?.team_name) || "TBD"}
 									</span>
 								</div>
 
 								{/* Status chip */}
 								<span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 shrink-0 ${STATUS_STYLES[status]}`}>
-									{status === "done" ? `✓ ${m.winner?.team_name ?? "Done"}` : status === "live" ? "Live" : "Upcoming"}
+									{status === "done" ? `✓ ${tc(m.winner?.team_name) || "Done"}` : status === "live" ? "Live" : "Upcoming"}
 								</span>
 							</div>
 						);

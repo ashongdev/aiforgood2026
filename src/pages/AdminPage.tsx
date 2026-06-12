@@ -23,6 +23,7 @@ import {
 	Users,
 } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { tc } from "../lib/format";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import type { SelectOption } from "../components/CustomSelect";
 import { CustomSelect } from "../components/CustomSelect";
@@ -1930,17 +1931,17 @@ function TeamsTab({
 											) : (
 												<>
 													<td className="px-3 py-2.5 font-semibold">
-														{team.team_name}
+														{tc(team.team_name)}
 													</td>
 													<td className="px-3 py-2.5 text-xs text-gray-500">
-														{team.country ?? (
+														{tc(team.country) || (
 															<span className="text-gray-300">
 																—
 															</span>
 														)}
 													</td>
 													<td className="px-3 py-2.5 text-xs text-gray-500">
-														{team.coach_name ?? (
+														{tc(team.coach_name) || (
 															<span className="text-gray-300">
 																—
 															</span>
@@ -2758,7 +2759,7 @@ function StandingsTable({
 						{s.rank}
 					</span>
 					<span className="text-sm font-semibold truncate">
-						{s.team.team_name}
+						{tc(s.team.team_name)}
 					</span>
 					<span
 						className={`text-right text-sm font-black font-mono ${s.best_round > 0 ? "text-editorial-green" : "text-gray-300"}`}
@@ -2816,7 +2817,7 @@ function SeedPreview({
 									<span className="text-xs text-gray-400 mr-1">
 										#{seedA}
 									</span>
-									{tA.team.team_name}
+									{tc(tA.team.team_name)}
 								</>
 							) : (
 								`Seed #${seedA} — no score`
@@ -2833,7 +2834,7 @@ function SeedPreview({
 									<span className="text-xs text-gray-400 mr-1">
 										#{seedB}
 									</span>
-									{tB.team.team_name}
+									{tc(tB.team.team_name)}
 								</>
 							) : (
 								`Seed #${seedB} — no score`
@@ -3006,7 +3007,7 @@ function MatchCard({
 								}`}
 							>
 								{suggested ? "★ " : ""}
-								{team.team_name}{" "}
+								{tc(team.team_name)}{" "}
 								<span className="font-mono">({score})</span>
 							</button>
 						);

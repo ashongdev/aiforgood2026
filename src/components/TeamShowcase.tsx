@@ -1,6 +1,7 @@
 import { ArrowLeft, Globe, Users } from "lucide-react";
 import { useState } from "react";
 import { getCountryFlag } from "../lib/countryFlag";
+import { tc } from "../lib/format";
 import type { Team } from "../lib/database.types";
 
 // ─── Team initials fallback ────────────────────────────────────────────────────
@@ -37,13 +38,13 @@ function TeamDetail({ team, onBack }: { team: Team; onBack: () => void }) {
 					) : (
 						<div className="w-16 h-16 shrink-0 bg-editorial-gold flex items-center justify-center">
 							<span className="text-xl font-black text-editorial-ink">
-								{initials(team.team_name)}
+								{initials(tc(team.team_name))}
 							</span>
 						</div>
 					)}
 					<div className="min-w-0">
 						<h2 className="text-2xl md:text-3xl font-black uppercase tracking-widest text-white leading-tight break-words">
-							{team.team_name}
+							{tc(team.team_name)}
 						</h2>
 						<span className="inline-block mt-1 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 bg-editorial-gold text-editorial-ink">
 							{team.category}
@@ -59,7 +60,7 @@ function TeamDetail({ team, onBack }: { team: Team; onBack: () => void }) {
 							<Globe size={15} className="shrink-0 text-gray-400 mt-0.5" />
 							<div>
 								<p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Country</p>
-								<p className="text-sm font-semibold">{team.country}</p>
+								<p className="text-sm font-semibold">{tc(team.country)}</p>
 							</div>
 						</div>
 					)}
@@ -70,7 +71,7 @@ function TeamDetail({ team, onBack }: { team: Team; onBack: () => void }) {
 							<span className="shrink-0 text-[10px] font-black uppercase tracking-widest text-gray-400 mt-0.5 w-[15px] text-center">C</span>
 							<div>
 								<p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Coach</p>
-								<p className="text-sm font-semibold">{team.coach_name}</p>
+								<p className="text-sm font-semibold">{tc(team.coach_name)}</p>
 							</div>
 						</div>
 					)}
@@ -167,7 +168,7 @@ export function TeamShowcase({ teams, category }: TeamShowcaseProps) {
 									) : (
 										<div className="w-14 h-14 bg-editorial-ink flex items-center justify-center group-hover:bg-white transition-colors">
 											<span className="text-lg font-black text-white group-hover:text-editorial-ink transition-colors">
-												{initials(team.team_name)}
+												{initials(tc(team.team_name))}
 											</span>
 										</div>
 									)}
@@ -176,11 +177,11 @@ export function TeamShowcase({ teams, category }: TeamShowcaseProps) {
 								{/* Name */}
 								<div className="w-full text-center">
 									<p className="text-xs font-black uppercase tracking-wide leading-tight line-clamp-2 group-hover:text-editorial-ink">
-										{team.team_name}
+										{tc(team.team_name)}
 									</p>
 									{team.country && (
 										<p className="text-[10px] text-gray-400 mt-1 group-hover:text-editorial-ink/60 transition-colors">
-											{team.country}
+											{tc(team.country)}
 										</p>
 									)}
 								</div>

@@ -107,9 +107,14 @@ function MatchCard({ match }: { match: MatchWithTeams }) {
 				} ${t1Wins ? "bg-editorial-gold/5 border-r-2 border-editorial-gold" : "border-r border-editorial-ink/10"}`}>
 					{team1 ? (
 						<>
-							{getCountryFlag((team1 as { team_name: string; country?: string | null }).country) && (
+							{getCountryFlag(team1.country) && (
 								<span className="text-xl leading-none">
-									{getCountryFlag((team1 as { team_name: string; country?: string | null }).country)}
+									{getCountryFlag(team1.country)}
+								</span>
+							)}
+							{team1.country && (
+								<span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">
+									{tc(team1.country)}
 								</span>
 							)}
 							<span className="text-base font-black text-editorial-ink leading-tight">
@@ -137,9 +142,14 @@ function MatchCard({ match }: { match: MatchWithTeams }) {
 				} ${t2Wins ? "bg-editorial-gold/5 border-l-2 border-editorial-gold" : "border-l border-editorial-ink/10"}`}>
 					{team2 ? (
 						<>
-							{getCountryFlag((team2 as { team_name: string; country?: string | null }).country) && (
+							{getCountryFlag(team2.country) && (
 								<span className="text-xl leading-none">
-									{getCountryFlag((team2 as { team_name: string; country?: string | null }).country)}
+									{getCountryFlag(team2.country)}
+								</span>
+							)}
+							{team2.country && (
+								<span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">
+									{tc(team2.country)}
 								</span>
 							)}
 							<span className="text-base font-black text-editorial-ink leading-tight">

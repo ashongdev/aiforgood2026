@@ -72,6 +72,11 @@ export function MatchNode({
 						{getCountryFlag(match.team1Country) && (
 							<span className="text-base leading-none">{getCountryFlag(match.team1Country)}</span>
 						)}
+						{match.team1Country && (
+							<span className="text-[8px] font-bold uppercase tracking-widest text-gray-400">
+								{match.team1Country}
+							</span>
+						)}
 						<span className="text-sm font-black text-editorial-ink leading-tight line-clamp-2">
 							{match.team1}
 						</span>
@@ -99,6 +104,11 @@ export function MatchNode({
 					} ${team2Wins ? "bg-editorial-gold/10 border-l-2 border-editorial-gold" : "border-l border-editorial-ink/20"}`}>
 						{getCountryFlag(match.team2Country) && (
 							<span className="text-base leading-none">{getCountryFlag(match.team2Country)}</span>
+						)}
+						{match.team2Country && (
+							<span className="text-[8px] font-bold uppercase tracking-widest text-gray-400">
+								{match.team2Country}
+							</span>
 						)}
 						<span className="text-sm font-black text-editorial-ink leading-tight line-clamp-2">
 							{match.team2}

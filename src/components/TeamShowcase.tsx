@@ -46,9 +46,16 @@ function TeamDetail({ team, onBack }: { team: Team; onBack: () => void }) {
 						<h2 className="text-2xl md:text-3xl font-black uppercase tracking-widest text-white leading-tight break-words">
 							{tc(team.team_name)}
 						</h2>
-						<span className="inline-block mt-1 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 bg-editorial-gold text-editorial-ink">
-							{team.category}
-						</span>
+						<div className="flex items-center gap-2 mt-1">
+							<span className="inline-block text-[10px] font-black uppercase tracking-widest px-2 py-0.5 bg-editorial-gold text-editorial-ink">
+								{team.category}
+							</span>
+							{team.country && (
+								<span className="text-[10px] font-bold uppercase tracking-widest text-white/60">
+									{tc(team.country)}
+								</span>
+							)}
+						</div>
 					</div>
 				</div>
 

@@ -4,3 +4,26 @@
 - Implement schedule so teams can see when they are up
 - Assign referee to a table
 - Implement translation
+
+
+
+
+
+
+
+
+
+
+ Name of the inviting organisation
+  Address of the inviting organisation
+  Postal Code
+  Post Office Box
+  Post Office Box Number
+  Email
+  Street
+  City
+  Country
+  Telephone Number
+  Surname of the contact person in the inviting organisation
+  Firstname(-s) of the contact person in the inviting organisation
+  

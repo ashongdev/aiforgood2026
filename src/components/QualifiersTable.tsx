@@ -187,10 +187,19 @@ export function QualifiersTable({
 									) : (
 										<span className="w-5 shrink-0" />
 									)}
-									<span
-										className={`text-sm font-semibold truncate ${isExpanded ? "text-white" : "text-editorial-ink"}`}
-									>
-										{standing.team_name}
+									<span className="min-w-0 flex flex-col">
+										<span
+											className={`text-sm font-semibold truncate ${isExpanded ? "text-white" : "text-editorial-ink"}`}
+										>
+											{standing.team_name}
+										</span>
+										{standing.country && (
+											<span
+												className={`text-[10px] truncate ${isExpanded ? "text-white/50" : "text-gray-400"}`}
+											>
+												{standing.country}
+											</span>
+										)}
 									</span>
 								</span>
 

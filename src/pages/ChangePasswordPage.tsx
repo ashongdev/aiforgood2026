@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Eye, EyeOff, ShieldAlert } from "lucide-react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { defaultPasswordFor } from "../lib/auth";
 import { supabase } from "../lib/supabase";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 
@@ -49,7 +50,7 @@ export function ChangePasswordPage() {
 			setError("Passwords do not match.");
 			return;
 		}
-		if (role && password.toLowerCase() === `${role}-default-password`) {
+		if (role && password.toLowerCase() === defaultPasswordFor(role)) {
 			setError("Please choose a password other than the default one.");
 			return;
 		}

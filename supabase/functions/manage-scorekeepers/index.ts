@@ -9,52 +9,53 @@
 //   APP_URL                   — e.g. https://your-app.vercel.app   (for email links)
 //   RESEND_API_KEY            — optional; if set, emails credentials to new scorekeepers
 //
-// If RESEND_API_KEY is not set, the generated password is returned to the admin UI
-// and the admin must share it manually.
+// Every account is created with a predictable default password
+// ("<role>-default-password") and is flagged must_change_password = true,
+// forcing them through the change-password screen on first login.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+	"Access-Control-Allow-Origin": "*",
+	"Access-Control-Allow-Headers":
+		"authorization, x-client-info, apikey, content-type",
 };
 
-function generatePassword(): string {
-  // Uses Web Crypto so it's available in Deno
-  const chars =
-    "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%";
-  const arr = new Uint8Array(14);
-  crypto.getRandomValues(arr);
-  return Array.from(arr)
-    .map((b) => chars[b % chars.length])
-    .join("");
+function defaultPasswordFor(
+	role: "scorekeeper" | "referee" | "mc" | "admin",
+): string {
+	return `${role}-aiforgood`;
 }
 
 async function sendEmail(
-  resendKey: string,
-  to: string,
-  email: string,
-  password: string,
-  tableNumber: number | null,
-  appUrl: string,
-  role: "scorekeeper" | "referee" | "mc" = "scorekeeper",
+	resendKey: string,
+	to: string,
+	email: string,
+	password: string,
+	tableNumber: number | null,
+	appUrl: string,
+	role: "scorekeeper" | "referee" | "mc" = "scorekeeper",
 ): Promise<boolean> {
-  const roleLabel = role === "referee" ? "Referee" : role === "mc" ? "MC (Master of Ceremonies)" : "Scorekeeper";
-  const tableNote = tableNumber
-    ? `<p>You have been assigned to <strong>Table ${tableNumber}</strong>.</p>`
-    : "";
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${resendKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: "AI for Good <onboarding@resend.dev>",
-      to: [to],
-      subject: `Your ${roleLabel} Account — AI for Good`,
-      html: `
+	const roleLabel =
+		role === "referee"
+			? "Referee"
+			: role === "mc"
+				? "MC (Master of Ceremonies)"
+				: "Scorekeeper";
+	const tableNote = tableNumber
+		? `<p>You have been assigned to <strong>Table ${tableNumber}</strong>.</p>`
+		: "";
+	const res = await fetch("https://api.resend.com/emails", {
+		method: "POST",
+		headers: {
+			Authorization: `Bearer ${resendKey}`,
+			"Content-Type": "application/json",
+		},
+		body: JSON.stringify({
+			from: "AI for Good <onboarding@resend.dev>",
+			to: [to],
+			subject: `Your ${roleLabel} Account — AI for Good`,
+			html: `
         <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
           <h2 style="color:#1a1a1a">You've been added as a ${roleLabel.toLowerCase()}</h2>
           <p>Sign in at <a href="${appUrl}/login">${appUrl}/login</a> using:</p>
@@ -69,207 +70,240 @@ async function sendEmail(
             </tr>
           </table>
           ${tableNote}
-          <p style="color:#888;font-size:12px">Please change your password after your first sign-in.</p>
+          <p style="color:#888;font-size:12px">You will be required to set a new password the first time you sign in.</p>
         </div>
       `,
-    }),
-  });
-  return res.ok;
+		}),
+	});
+	return res.ok;
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+	if (req.method === "OPTIONS") {
+		return new Response("ok", { headers: corsHeaders });
+	}
 
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: corsHeaders,
-    });
-  }
+	const authHeader = req.headers.get("Authorization");
+	if (!authHeader) {
+		return new Response(JSON.stringify({ error: "Unauthorized" }), {
+			status: 401,
+			headers: corsHeaders,
+		});
+	}
 
-  const adminClient = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    { auth: { autoRefreshToken: false, persistSession: false } },
-  );
+	const adminClient = createClient(
+		Deno.env.get("SUPABASE_URL")!,
+		Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+		{ auth: { autoRefreshToken: false, persistSession: false } },
+	);
 
-  // Verify caller holds a valid JWT and is an admin
-  const token = authHeader.replace("Bearer ", "");
-  const {
-    data: { user: caller },
-    error: authError,
-  } = await adminClient.auth.getUser(token);
-  if (authError || !caller) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: corsHeaders,
-    });
-  }
+	// Verify caller holds a valid JWT and is an admin
+	const token = authHeader.replace("Bearer ", "");
+	const {
+		data: { user: caller },
+		error: authError,
+	} = await adminClient.auth.getUser(token);
+	if (authError || !caller) {
+		return new Response(JSON.stringify({ error: "Unauthorized" }), {
+			status: 401,
+			headers: corsHeaders,
+		});
+	}
 
-  const { data: callerProfile } = await adminClient
-    .from("user_profiles")
-    .select("role")
-    .eq("id", caller.id)
-    .single();
+	const { data: callerProfile } = await adminClient
+		.from("user_profiles")
+		.select("role")
+		.eq("id", caller.id)
+		.single();
 
-  if (callerProfile?.role !== "admin") {
-    return new Response(JSON.stringify({ error: "Forbidden" }), {
-      status: 403,
-      headers: corsHeaders,
-    });
-  }
+	if (callerProfile?.role !== "admin") {
+		return new Response(JSON.stringify({ error: "Forbidden" }), {
+			status: 403,
+			headers: corsHeaders,
+		});
+	}
 
-  const body = await req.json();
-  const { action } = body;
+	const body = await req.json();
+	const { action } = body;
 
-  try {
-    // ── Create ─────────────────────────────────────────────────────────────────
-    if (action === "create") {
-      const { email, table_number, role: staffRole = "scorekeeper" } = body as {
-        email: string;
-        table_number: number | null;
-        role?: "scorekeeper" | "referee" | "mc";
-      };
+	try {
+		// ── Create ─────────────────────────────────────────────────────────────────
+		if (action === "create") {
+			const {
+				email,
+				table_number,
+				role: staffRole = "scorekeeper",
+			} = body as {
+				email: string;
+				table_number: number | null;
+				role?: "scorekeeper" | "referee" | "mc";
+			};
 
-      const password = generatePassword();
+			const password = defaultPasswordFor(staffRole);
 
-      const { data: newUser, error: createError } =
-        await adminClient.auth.admin.createUser({
-          email,
-          password,
-          email_confirm: true,
-        });
+			const { data: newUser, error: createError } =
+				await adminClient.auth.admin.createUser({
+					email,
+					password,
+					email_confirm: true,
+				});
 
-      if (createError || !newUser?.user) {
-        return new Response(
-          JSON.stringify({ error: createError?.message ?? "User creation failed" }),
-          { status: 400, headers: corsHeaders },
-        );
-      }
+			if (createError || !newUser?.user) {
+				return new Response(
+					JSON.stringify({
+						error: createError?.message ?? "User creation failed",
+					}),
+					{ status: 400, headers: corsHeaders },
+				);
+			}
 
-      await adminClient.from("user_profiles").insert({
-        id: newUser.user.id,
-        role: staffRole,
-        table_number: table_number ?? null,
-        email,
-        temp_password: password,
-      });
+			await adminClient.from("user_profiles").insert({
+				id: newUser.user.id,
+				role: staffRole,
+				table_number: table_number ?? null,
+				email,
+				temp_password: password,
+				must_change_password: true,
+			});
 
-      let emailSent = false;
-      const resendKey = Deno.env.get("RESEND_API_KEY");
-      if (resendKey) {
-        const appUrl =
-          Deno.env.get("APP_URL") ?? "https://your-app.vercel.app";
-        emailSent = await sendEmail(
-          resendKey,
-          email,
-          email,
-          password,
-          table_number ?? null,
-          appUrl,
-          staffRole,
-        );
-      }
+			let emailSent = false;
+			const resendKey = Deno.env.get("RESEND_API_KEY");
+			if (resendKey) {
+				const appUrl =
+					Deno.env.get("APP_URL") ?? "https://your-app.vercel.app";
+				emailSent = await sendEmail(
+					resendKey,
+					email,
+					email,
+					password,
+					table_number ?? null,
+					appUrl,
+					staffRole,
+				);
+			}
 
-      return new Response(
-        JSON.stringify({
-          password,
-          emailSent,
-          user: { id: newUser.user.id, email },
-        }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
+			return new Response(
+				JSON.stringify({
+					password,
+					emailSent,
+					user: { id: newUser.user.id, email },
+				}),
+				{
+					status: 200,
+					headers: {
+						...corsHeaders,
+						"Content-Type": "application/json",
+					},
+				},
+			);
+		}
 
-    // ── Reset Password ─────────────────────────────────────────────────────────
-    if (action === "resetPassword") {
-      const { userId, email, role: staffRole = "scorekeeper" } = body as {
-        userId: string;
-        email: string;
-        role?: "scorekeeper" | "referee" | "mc";
-      };
+		// ── Reset Password ─────────────────────────────────────────────────────────
+		if (action === "resetPassword") {
+			const {
+				userId,
+				email,
+				role: staffRole = "scorekeeper",
+			} = body as {
+				userId: string;
+				email: string;
+				role?: "scorekeeper" | "referee" | "mc";
+			};
 
-      const password = generatePassword();
+			const password = defaultPasswordFor(staffRole);
 
-      const { error: updateError } = await adminClient.auth.admin.updateUserById(userId, { password });
-      if (updateError) {
-        return new Response(JSON.stringify({ error: updateError.message }), {
-          status: 400, headers: corsHeaders,
-        });
-      }
+			const { error: updateError } =
+				await adminClient.auth.admin.updateUserById(userId, {
+					password,
+				});
+			if (updateError) {
+				return new Response(
+					JSON.stringify({ error: updateError.message }),
+					{
+						status: 400,
+						headers: corsHeaders,
+					},
+				);
+			}
 
-      await adminClient.from("user_profiles").update({ temp_password: password }).eq("id", userId);
+			await adminClient
+				.from("user_profiles")
+				.update({ temp_password: password, must_change_password: true })
+				.eq("id", userId);
 
-      let emailSent = false;
-      const resendKey = Deno.env.get("RESEND_API_KEY");
-      if (resendKey && email) {
-        const appUrl = Deno.env.get("APP_URL") ?? "https://your-app.vercel.app";
-        emailSent = await sendEmail(resendKey, email, email, password, null, appUrl, staffRole);
-      }
+			let emailSent = false;
+			const resendKey = Deno.env.get("RESEND_API_KEY");
+			if (resendKey && email) {
+				const appUrl =
+					Deno.env.get("APP_URL") ?? "https://your-app.vercel.app";
+				emailSent = await sendEmail(
+					resendKey,
+					email,
+					email,
+					password,
+					null,
+					appUrl,
+					staffRole,
+				);
+			}
 
-      return new Response(
-        JSON.stringify({ password, emailSent }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
+			return new Response(JSON.stringify({ password, emailSent }), {
+				status: 200,
+				headers: { ...corsHeaders, "Content-Type": "application/json" },
+			});
+		}
 
-    // ── Delete ─────────────────────────────────────────────────────────────────
-    if (action === "delete") {
-      const { userId } = body as { userId: string };
-      const { error } = await adminClient.auth.admin.deleteUser(userId);
-      if (error) {
-        return new Response(JSON.stringify({ error: error.message }), {
-          status: 400,
-          headers: corsHeaders,
-        });
-      }
-      return new Response(JSON.stringify({ success: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+		// ── Delete ─────────────────────────────────────────────────────────────────
+		if (action === "delete") {
+			const { userId } = body as { userId: string };
+			const { error } = await adminClient.auth.admin.deleteUser(userId);
+			if (error) {
+				return new Response(JSON.stringify({ error: error.message }), {
+					status: 400,
+					headers: corsHeaders,
+				});
+			}
+			return new Response(JSON.stringify({ success: true }), {
+				headers: { ...corsHeaders, "Content-Type": "application/json" },
+			});
+		}
 
-    // ── Update ─────────────────────────────────────────────────────────────────
-    if (action === "update") {
-      const { userId, table_number, email } = body as {
-        userId: string;
-        table_number?: number | null;
-        email?: string;
-      };
+		// ── Update ─────────────────────────────────────────────────────────────────
+		if (action === "update") {
+			const { userId, table_number, email } = body as {
+				userId: string;
+				table_number?: number | null;
+				email?: string;
+			};
 
-      if (email) {
-        await adminClient.auth.admin.updateUserById(userId, { email });
-      }
+			if (email) {
+				await adminClient.auth.admin.updateUserById(userId, { email });
+			}
 
-      const updates: Record<string, unknown> = {};
-      if (table_number !== undefined) updates.table_number = table_number;
-      if (email !== undefined) updates.email = email;
+			const updates: Record<string, unknown> = {};
+			if (table_number !== undefined) updates.table_number = table_number;
+			if (email !== undefined) updates.email = email;
 
-      if (Object.keys(updates).length > 0) {
-        await adminClient
-          .from("user_profiles")
-          .update(updates)
-          .eq("id", userId);
-      }
+			if (Object.keys(updates).length > 0) {
+				await adminClient
+					.from("user_profiles")
+					.update(updates)
+					.eq("id", userId);
+			}
 
-      return new Response(JSON.stringify({ success: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+			return new Response(JSON.stringify({ success: true }), {
+				headers: { ...corsHeaders, "Content-Type": "application/json" },
+			});
+		}
 
-    return new Response(JSON.stringify({ error: "Unknown action" }), {
-      status: 400,
-      headers: corsHeaders,
-    });
-  } catch (err) {
-    return new Response(JSON.stringify({ error: String(err) }), {
-      status: 500,
-      headers: corsHeaders,
-    });
-  }
+		return new Response(JSON.stringify({ error: "Unknown action" }), {
+			status: 400,
+			headers: corsHeaders,
+		});
+	} catch (err) {
+		return new Response(JSON.stringify({ error: String(err) }), {
+			status: 500,
+			headers: corsHeaders,
+		});
+	}
 });

@@ -15,6 +15,7 @@ import {
 	RefreshCw,
 	RotateCcw,
 	Search,
+	ShieldAlert,
 	ShieldCheck,
 	Trash2,
 	Trophy,
@@ -3126,7 +3127,7 @@ function ScoreekeepersTab() {
 		setIsLoading(true);
 		const { data } = await supabase
 			.from("user_profiles")
-			.select("id, email, table_number, created_at, role, locked")
+			.select("id, email, table_number, created_at, role, locked, temp_password, must_change_password")
 			.in("role", ["scorekeeper", "referee", "mc"])
 			.order("created_at", { ascending: false });
 		setScorekeepers((data as ScorekeeperProfile[]) ?? []);
@@ -3229,7 +3230,7 @@ function ScoreekeepersTab() {
 		if (!error && !(data as { error?: string })?.error) {
 			const newPwd = (data as { password: string }).password;
 			setScorekeepers(prev => prev.map(sk =>
-				sk.id === userId ? { ...sk, temp_password: newPwd } : sk
+				sk.id === userId ? { ...sk, temp_password: newPwd, must_change_password: true } : sk
 			));
 			setPwdVisible(prev => ({ ...prev, [userId]: true }));
 			setRevealPwdId(userId);
@@ -3301,6 +3302,9 @@ function ScoreekeepersTab() {
 							</button>
 						</div>
 					</div>
+					<p className="text-[11px] text-gray-500 italic">
+						This is the default password for their role — they will be required to set a new one the first time they sign in.
+					</p>
 					<button
 						onClick={() => setNewCred(null)}
 						className="text-xs text-gray-400 hover:text-gray-600 underline"
@@ -3506,6 +3510,15 @@ function ScoreekeepersTab() {
 												<span className="shrink-0 flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-red-600 border border-red-200 bg-red-50 px-1.5 py-0.5">
 													<Lock size={9} />
 													Locked
+												</span>
+											)}
+											{sk.must_change_password && (
+												<span
+													className="shrink-0 flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-amber-700 border border-amber-200 bg-amber-50 px-1.5 py-0.5"
+													title="Still signing in with the default password"
+												>
+													<ShieldAlert size={9} />
+													Default Password
 												</span>
 											)}
 											<span

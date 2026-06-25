@@ -5,6 +5,7 @@ import App from "./App.tsx";
 import { AuthProvider } from "./contexts/AuthContext.tsx";
 import "./index.css";
 import { LoginPage } from "./pages/LoginPage.tsx";
+import { ChangePasswordPage } from "./pages/ChangePasswordPage.tsx";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute.tsx";
 import { ScorekeeperPage } from "./pages/ScorekeeperPage.tsx";
 import { AdminPage } from "./pages/AdminPage.tsx";
@@ -23,6 +24,7 @@ createRoot(document.getElementById("root")!).render(
 
 					{/* Auth */}
 					<Route path="/login" element={<LoginPage />} />
+					<Route path="/change-password" element={<ChangePasswordPage />} />
 
 					{/* Scorekeeper grid — requires 'scorekeeper' or 'admin' role */}
 					<Route

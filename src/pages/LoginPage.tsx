@@ -3,8 +3,15 @@ import { Eye, EyeOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 
+function destFor(role: string | null): string {
+	return role === "admin" ? "/admin"
+		: role === "referee" ? "/referee"
+		: role === "mc" ? "/mc"
+		: "/scorekeeper";
+}
+
 export function LoginPage() {
-	const { signIn, role, isLoading } = useAuth();
+	const { signIn, role, profile, isLoading } = useAuth();
 	const navigate = useNavigate();
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
@@ -14,7 +21,7 @@ export function LoginPage() {
 
 	// Redirect if already logged in
 	if (!isLoading && role) {
-		const dest = role === "admin" ? "/admin" : "/scorekeeper";
+		const dest = profile?.must_change_password ? "/change-password" : destFor(role);
 		navigate(dest, { replace: true });
 		return null;
 	}
@@ -38,7 +45,7 @@ export function LoginPage() {
 
 	// Navigate after role loads post-login
 	if (!isLoading && role && !isSubmitting) {
-		const dest = role === "admin" ? "/admin" : "/scorekeeper";
+		const dest = profile?.must_change_password ? "/change-password" : destFor(role);
 		navigate(dest, { replace: true });
 	}
 

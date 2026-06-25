@@ -14,6 +14,7 @@ export interface UserProfile {
   table_number: number | null
   email: string | null
   locked: boolean
+  must_change_password: boolean
   created_at: string
 }
 
@@ -24,6 +25,7 @@ export interface ScorekeeperProfile {
   email: string | null
   locked: boolean
   temp_password: string | null
+  must_change_password: boolean
   created_at: string
 }
 

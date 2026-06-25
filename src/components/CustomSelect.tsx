@@ -77,6 +77,20 @@ export function CustomSelect({
 		return () => document.removeEventListener("mousedown", onOutsideClick);
 	}, []);
 
+	// Close on scroll outside the dropdown itself — otherwise the absolutely
+	// positioned panel drifts with the page and can end up floating over the
+	// sticky navbar. Scrolling the dropdown's own option list is exempt.
+	useEffect(() => {
+		if (!open) return;
+		function onScroll(e: Event) {
+			if (containerRef.current?.contains(e.target as Node)) return;
+			setOpen(false);
+			setQuery("");
+		}
+		window.addEventListener("scroll", onScroll, true);
+		return () => window.removeEventListener("scroll", onScroll, true);
+	}, [open]);
+
 	// Trigger styles
 	const triggerBase =
 		"flex items-center gap-1.5 px-2 h-[30px] text-xs font-semibold focus:outline-none cursor-pointer transition-colors w-full text-left";

@@ -2406,17 +2406,26 @@ function CollapsiblePanel({
 	children: React.ReactNode;
 }) {
 	const ref = useRef<HTMLDivElement>(null);
-	const [height, setHeight] = useState<number | "auto">("auto");
+	const [height, setHeight] = useState<number | "auto">(0);
+	const [isAnimating, setIsAnimating] = useState(false);
 
 	useEffect(() => {
-		if (ref.current) {
-			setHeight(open ? ref.current.scrollHeight : 0);
+		const el = ref.current;
+		if (!el) return;
+		setIsAnimating(true);
+		if (open) {
+			setHeight(el.scrollHeight);
+		} else {
+			// Pin to a concrete pixel height first (in case it's "auto"), then
+			// collapse to 0 on the next frame so the height transition can run.
+			setHeight(el.scrollHeight);
+			requestAnimationFrame(() => requestAnimationFrame(() => setHeight(0)));
 		}
-	}, [open, children]);
+	}, [open]);
 
 	return (
 		<div
-			className={`border bg-white overflow-hidden ${accent ? "border-editorial-gold/60" : "border-gray-200"}`}
+			className={`border bg-white ${accent ? "border-editorial-gold/60" : "border-gray-200"}`}
 		>
 			<button
 				onClick={onToggle}
@@ -2434,8 +2443,15 @@ function CollapsiblePanel({
 			<div
 				style={{
 					height: typeof height === "number" ? `${height}px` : height,
-					overflow: "hidden",
+					// Only clip while the height transition is actually running —
+					// once open and settled, allow dropdowns/overlays inside to escape.
+					overflow: isAnimating || !open ? "hidden" : "visible",
 					transition: "height 200ms ease",
+				}}
+				onTransitionEnd={(e) => {
+					if (e.propertyName !== "height") return;
+					if (open) setHeight("auto");
+					setIsAnimating(false);
 				}}
 			>
 				<div ref={ref} className="border-t border-gray-100">

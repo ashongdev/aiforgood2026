@@ -37,22 +37,24 @@ const PHASES: Phase[] = [
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 // rankByTotal=true for Pre-Quarters/Quarters (rulebook §h.4.2: ranked by total points)
-// rankByTotal=false for Qualifiers (ranked by best single round, total as tie-breaker)
+// rankByTotal=false for Qualifiers (ranked by best single round; ties broken by
+// fewest absences, then total — rulebook §h.3.2)
 function computeSpectatorStandings(matches: MatchWithTeams[], rankByTotal = false): SpectatorStanding[] {
 	const map = new Map<string, {
 		team_name: string;
 		country: string | null;
 		r1: number | null; r2: number | null; r3: number | null; r4: number | null;
-		best_round: number; total: number;
+		best_round: number; total: number; absences: number;
 	}>();
 
 	function processTeam(
 		id: string | null, team: { team_name: string; country?: string | null } | null,
 		r1: number | null, r2: number | null, r3: number | null, r4: number | null,
+		a1: boolean, a2: boolean, a3: boolean, a4: boolean,
 	) {
 		if (!id || !team) return;
 		const scored = [r1, r2, r3, r4].filter((v): v is number => v !== null && v > 0);
-		const e = map.get(id) ?? { team_name: tc(team.team_name), country: tc(team.country), r1: null, r2: null, r3: null, r4: null, best_round: 0, total: 0 };
+		const e = map.get(id) ?? { team_name: tc(team.team_name), country: tc(team.country), r1: null, r2: null, r3: null, r4: null, best_round: 0, total: 0, absences: 0 };
 		if (e.r1 === null && r1 !== null) e.r1 = r1;
 		if (e.r2 === null && r2 !== null) e.r2 = r2;
 		if (e.r3 === null && r3 !== null) e.r3 = r3;
@@ -61,18 +63,26 @@ function computeSpectatorStandings(matches: MatchWithTeams[], rankByTotal = fals
 			e.best_round = Math.max(e.best_round, ...scored);
 			e.total += scored.reduce((a, b) => a + b, 0);
 		}
+		e.absences += [a1, a2, a3, a4].filter(Boolean).length;
 		map.set(id, e);
 	}
 
 	for (const m of matches) {
-		processTeam(m.team_1_id, m.team_1, m.team_1_r1, m.team_1_r2, m.team_1_r3, m.team_1_r4);
-		processTeam(m.team_2_id, m.team_2, m.team_2_r1, m.team_2_r2, m.team_2_r3, m.team_2_r4);
+		processTeam(m.team_1_id, m.team_1, m.team_1_r1, m.team_1_r2, m.team_1_r3, m.team_1_r4,
+			m.team_1_r1_absent, m.team_1_r2_absent, m.team_1_r3_absent, m.team_1_r4_absent);
+		processTeam(m.team_2_id, m.team_2, m.team_2_r1, m.team_2_r2, m.team_2_r3, m.team_2_r4,
+			m.team_2_r1_absent, m.team_2_r2_absent, m.team_2_r3_absent, m.team_2_r4_absent);
 	}
 
 	return Array.from(map.entries())
-		.sort(([, a], [, b]) => rankByTotal
-			? (b.total !== a.total ? b.total - a.total : b.best_round - a.best_round)
-			: (b.best_round !== a.best_round ? b.best_round - a.best_round : b.total - a.total))
+		.sort(([, a], [, b]) => {
+			if (rankByTotal) {
+				return b.total !== a.total ? b.total - a.total : b.best_round - a.best_round;
+			}
+			if (b.best_round !== a.best_round) return b.best_round - a.best_round;
+			if (a.absences !== b.absences) return a.absences - b.absences;
+			return b.total - a.total;
+		})
 		.map(([id, e], i) => ({ ...e, teamId: id, rank: i + 1 }));
 }
 

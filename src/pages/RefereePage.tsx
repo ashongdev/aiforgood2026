@@ -1,4 +1,4 @@
-import { CloudOff, Lock, Loader2, LogOut, Minus, Plus, RefreshCw, Wifi, X } from "lucide-react";
+import { CloudOff, Lock, Loader2, LogOut, Minus, Plus, RefreshCw, UserX, Wifi, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { CustomSelect } from "../components/CustomSelect";
@@ -90,22 +90,24 @@ interface ScoringPanelProps {
   roundLabel: string;
   category: Category;
   initialBreakdown: RoundBreakdown;
+  initialAbsent: boolean;
   isSaving: boolean;
-  onSave: (breakdown: RoundBreakdown, total: number) => void;
+  onSave: (breakdown: RoundBreakdown, total: number, absent: boolean) => void;
   onClose: () => void;
 }
 
 function ScoringPanel({
-  teamName, roundLabel, category, initialBreakdown, isSaving, onSave, onClose,
+  teamName, roundLabel, category, initialBreakdown, initialAbsent, isSaving, onSave, onClose,
 }: ScoringPanelProps) {
   const [breakdown, setBreakdown] = useState<RoundBreakdown>({ ...initialBreakdown });
+  const [absent, setAbsent] = useState(initialAbsent);
 
   function adjust(key: keyof RoundBreakdown, delta: 1 | -1) {
     setBreakdown(prev => ({ ...prev, [key]: Math.max(0, prev[key] + delta) }));
   }
 
-  const total = computeRoundScore(breakdown, category);
-  const totalColor = total > 0 ? "text-emerald-600" : total < 0 ? "text-red-500" : "text-editorial-ink";
+  const total = absent ? 0 : computeRoundScore(breakdown, category);
+  const totalColor = absent ? "text-amber-600" : total > 0 ? "text-emerald-600" : total < 0 ? "text-red-500" : "text-editorial-ink";
 
   const sections = [
     { title: "Mission 1 — Cultivation & Irrigation", items: MISSION_1_ITEMS },
@@ -138,8 +140,31 @@ function ScoringPanel({
           </div>
         </div>
 
+        {/* Absent toggle */}
+        <button
+          onClick={() => setAbsent(v => !v)}
+          className={`flex items-center gap-3 px-4 py-3 border-b transition-colors text-left ${
+            absent ? "bg-amber-50 border-amber-200" : "bg-white border-gray-100 hover:bg-gray-50"
+          }`}
+        >
+          <span className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${absent ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-400"}`}>
+            <UserX size={16} />
+          </span>
+          <span className="flex-1">
+            <span className={`block text-sm font-black ${absent ? "text-amber-800" : "text-editorial-ink"}`}>
+              Team Did Not Show Up
+            </span>
+            <span className="block text-[11px] text-gray-500 leading-tight">
+              Forfeits this round · counts as an absence for ranking
+            </span>
+          </span>
+          <span className={`w-11 h-6 rounded-full shrink-0 transition-colors relative ${absent ? "bg-amber-500" : "bg-gray-200"}`}>
+            <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${absent ? "translate-x-5" : "translate-x-0.5"}`} />
+          </span>
+        </button>
+
         {/* Scrollable body */}
-        <div className="overflow-y-auto flex-1 px-4 py-2">
+        <div className={`overflow-y-auto flex-1 px-4 py-2 ${absent ? "opacity-40 pointer-events-none" : ""}`}>
           {sections.map(({ title, items }) => {
             const sectionTotal = items.reduce(
               (s, item) => s + breakdown[item.key] * item.pts(category), 0
@@ -201,14 +226,22 @@ function ScoringPanel({
             Cancel
           </button>
           <button
-            onClick={() => onSave(breakdown, total)}
+            onClick={() => onSave(breakdown, total, absent)}
             disabled={isSaving}
             className={`flex-2 h-14 rounded-xl font-black text-white flex items-center justify-center gap-2 transition-colors px-6 ${
-              isSaving ? "bg-editorial-gold/60" : "bg-editorial-ink active:bg-editorial-gold active:text-editorial-ink"
+              isSaving
+                ? "bg-editorial-gold/60"
+                : absent
+                  ? "bg-amber-600 active:bg-amber-700"
+                  : "bg-editorial-ink active:bg-editorial-gold active:text-editorial-ink"
             }`}
           >
             {isSaving ? <Loader2 size={18} className="animate-spin" /> : null}
-            {isSaving ? "Saving…" : `Save  ${total > 0 ? "+" : ""}${total} pts`}
+            {isSaving
+              ? "Saving…"
+              : absent
+                ? "Save — Mark Absent"
+                : `Save  ${total > 0 ? "+" : ""}${total} pts`}
           </button>
         </div>
       </div>
@@ -219,11 +252,12 @@ function ScoringPanel({
 // ─── Round score button ─────────────────────────────────────────────────────────
 
 function RoundBtn({
-  roundNum, value, hasBreakdown, readOnly, onTap,
+  roundNum, value, hasBreakdown, absent, readOnly, onTap,
 }: {
   roundNum: number;
   value: number | null;
   hasBreakdown: boolean;
+  absent: boolean;
   readOnly: boolean;
   onTap: () => void;
 }) {
@@ -234,19 +268,28 @@ function RoundBtn({
       className={`flex flex-col items-center justify-center gap-0.5 min-h-[60px] rounded-xl border-2 transition-colors select-none ${
         readOnly
           ? "border-gray-100 bg-gray-50 cursor-not-allowed"
+          : absent
+          ? "border-amber-400 bg-amber-50 active:bg-amber-100"
           : hasBreakdown
           ? "border-editorial-gold bg-editorial-gold/10 active:bg-editorial-gold/20"
           : "border-gray-200 bg-white active:bg-editorial-gold/10"
       }`}
     >
       <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">R{roundNum}</span>
-      <span className={`text-xl font-black font-mono leading-none ${
-        value !== null ? "text-editorial-ink" : "text-gray-200"
-      }`}>
-        {value ?? "—"}
-      </span>
-      {hasBreakdown && (
+      {absent ? (
+        <span className="text-sm font-black font-mono leading-none text-amber-700">ABS</span>
+      ) : (
+        <span className={`text-xl font-black font-mono leading-none ${
+          value !== null ? "text-editorial-ink" : "text-gray-200"
+        }`}>
+          {value ?? "—"}
+        </span>
+      )}
+      {hasBreakdown && !absent && (
         <span className="text-[8px] text-editorial-gold font-bold tracking-wide">scored</span>
+      )}
+      {absent && (
+        <span className="text-[8px] text-amber-600 font-bold tracking-wide">absent</span>
       )}
     </button>
   );
@@ -315,6 +358,7 @@ function MatchCard({ match, activeRounds, readOnly, saveError, onRoundTap }: Mat
               roundNum={r}
               value={(match[`team_1_r${r}` as keyof MatchWithTeams] as number | null) ?? null}
               hasBreakdown={!!breakdown[breakdownKey(1, r as 1 | 2 | 3 | 4)]}
+              absent={!!match[`team_1_r${r}_absent` as keyof MatchWithTeams]}
               readOnly={readOnly || !match.team_1}
               onTap={() => onRoundTap(match.id, 1, r)}
             />
@@ -338,6 +382,7 @@ function MatchCard({ match, activeRounds, readOnly, saveError, onRoundTap }: Mat
               roundNum={r}
               value={(match[`team_2_r${r}` as keyof MatchWithTeams] as number | null) ?? null}
               hasBreakdown={!!breakdown[breakdownKey(2, r as 1 | 2 | 3 | 4)]}
+              absent={!!match[`team_2_r${r}_absent` as keyof MatchWithTeams]}
               readOnly={readOnly || !match.team_2}
               onTap={() => onRoundTap(match.id, 2, r)}
             />
@@ -361,17 +406,6 @@ function MatchCard({ match, activeRounds, readOnly, saveError, onRoundTap }: Mat
 export function RefereePage() {
   const { profile, isLoading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
-
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-editorial-ink flex items-center justify-center">
-        <Loader2 size={32} className="animate-spin text-editorial-gold" />
-      </div>
-    );
-  }
-  if (!profile) {
-    return <Navigate to="/login" replace />;
-  }
   const [searchParams, setSearchParams] = useSearchParams();
 
   // ── Filter state (URL-persisted) ─────────────────────────────────────────
@@ -513,6 +547,7 @@ export function RefereePage() {
     roundNum: number;
     teamName: string;
     breakdown: RoundBreakdown;
+    absent: boolean;
   } | null>(null);
 
   function openPanel(matchId: string, teamSlot: 1 | 2, roundNum: number) {
@@ -526,37 +561,43 @@ export function RefereePage() {
     const breakdown: RoundBreakdown = existing
       ? { ...EMPTY_BREAKDOWN, ...(existing as unknown as Partial<RoundBreakdown>) }
       : { ...EMPTY_BREAKDOWN };
+    const absent = !!match[`team_${teamSlot}_r${roundNum}_absent` as keyof MatchWithTeams];
 
-    setPanel({ matchId, teamSlot, roundNum, teamName: tc(team.team_name), breakdown });
+    setPanel({ matchId, teamSlot, roundNum, teamName: tc(team.team_name), breakdown, absent });
   }
 
-  async function handleSave(breakdown: RoundBreakdown, total: number) {
+  async function handleSave(breakdown: RoundBreakdown, total: number, absent: boolean) {
     if (!panel) return;
     const { matchId, teamSlot, roundNum } = panel;
     const match = matches.find(m => m.id === matchId);
     if (!match) return;
 
     const roundCol = `team_${teamSlot}_r${roundNum}` as ScoreCol;
+    const absentCol = `team_${teamSlot}_r${roundNum}_absent` as const;
+    const finalTotal = absent ? 0 : total;
     const key = breakdownKey(teamSlot, roundNum as 1 | 2 | 3 | 4);
-    const newBreakdownMap: Record<string, Record<string, number>> = {
-      ...(match.score_breakdown ?? {}),
-      [key]: breakdown as unknown as Record<string, number>,
-    };
+    const newBreakdownMap: Record<string, Record<string, number>> = { ...(match.score_breakdown ?? {}) };
+    if (absent) {
+      delete newBreakdownMap[key];
+    } else {
+      newBreakdownMap[key] = breakdown as unknown as Record<string, number>;
+    }
 
     // Build final points for both teams (i is 0-based index, round col is i+1)
     const t1Rounds = [0, 1, 2, 3].map((i) => {
       if (i >= activeRounds) return null;
-      if (teamSlot === 1 && roundNum === i + 1) return total;
+      if (teamSlot === 1 && roundNum === i + 1) return finalTotal;
       return (match[`team_1_r${i + 1}` as keyof typeof match] as number | null) ?? null;
     });
     const t2Rounds = [0, 1, 2, 3].map((i) => {
       if (i >= activeRounds) return null;
-      if (teamSlot === 2 && roundNum === i + 1) return total;
+      if (teamSlot === 2 && roundNum === i + 1) return finalTotal;
       return (match[`team_2_r${i + 1}` as keyof typeof match] as number | null) ?? null;
     });
 
     const update = {
-      [roundCol]: total,
+      [roundCol]: finalTotal,
+      [absentCol]: absent,
       team_1_final_points: calcFinalPoints(t1Rounds[0], t1Rounds[1], t1Rounds[2], t1Rounds[3]),
       team_2_final_points: calcFinalPoints(t2Rounds[0], t2Rounds[1], t2Rounds[2], t2Rounds[3]),
       score_breakdown: newBreakdownMap,
@@ -573,10 +614,10 @@ export function RefereePage() {
 
     if (error) {
       setSaveError(prev => ({ ...prev, [matchId]: error.message }));
-      setMatches(prev => prev.map(m => m.id === matchId ? { ...m, [roundCol]: match[roundCol as keyof typeof match] } : m));
+      setMatches(prev => prev.map(m => m.id === matchId ? { ...m, [roundCol]: match[roundCol as keyof typeof match], [absentCol]: match[absentCol as keyof typeof match] } : m));
     } else if (!saved || saved.length === 0) {
       setSaveError(prev => ({ ...prev, [matchId]: "Blocked — phase may be locked" }));
-      setMatches(prev => prev.map(m => m.id === matchId ? { ...m, [roundCol]: match[roundCol as keyof typeof match] } : m));
+      setMatches(prev => prev.map(m => m.id === matchId ? { ...m, [roundCol]: match[roundCol as keyof typeof match], [absentCol]: match[absentCol as keyof typeof match] } : m));
     } else {
       setSaveError(prev => { const n = { ...prev }; delete n[matchId]; return n; });
       if (!isQualifiers) setElimActiveRounds(prev => Math.max(prev, roundNum));
@@ -587,6 +628,19 @@ export function RefereePage() {
 
   const availableTables = [...new Set(matches.map(m => m.table_number).filter((t): t is number => t !== null))].sort((a, b) => a - b);
   const visibleMatches = tableFilter === "all" ? matches : matches.filter(m => m.table_number === parseInt(tableFilter, 10));
+
+  // ── Auth guards (placed after ALL hooks — Rules of Hooks) ──────────────────
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-editorial-ink flex items-center justify-center">
+        <Loader2 size={32} className="animate-spin text-editorial-gold" />
+      </div>
+    );
+  }
+  if (!profile) {
+    return <Navigate to="/login" replace />;
+  }
 
   // ── Locked overlay ─────────────────────────────────────────────────────────
 
@@ -706,6 +760,7 @@ export function RefereePage() {
           roundLabel={`${phase} · Round ${panel.roundNum}`}
           category={category}
           initialBreakdown={panel.breakdown}
+          initialAbsent={panel.absent}
           isSaving={!!saving[panel.matchId]}
           onSave={handleSave}
           onClose={() => setPanel(null)}

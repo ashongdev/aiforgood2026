@@ -17,6 +17,7 @@ export interface SpectatorStanding {
 	r4: number | null;
 	best_round: number;
 	total: number;
+	absences?: number;
 }
 
 interface QualifiersTableProps {
@@ -188,10 +189,20 @@ export function QualifiersTable({
 										<span className="w-5 shrink-0" />
 									)}
 									<span className="min-w-0 flex flex-col">
-										<span
-											className={`text-sm font-semibold truncate ${isExpanded ? "text-white" : "text-editorial-ink"}`}
-										>
-											{standing.team_name}
+										<span className="flex items-center gap-1.5 min-w-0">
+											<span
+												className={`text-sm font-semibold truncate ${isExpanded ? "text-white" : "text-editorial-ink"}`}
+											>
+												{standing.team_name}
+											</span>
+											{!!standing.absences && (
+												<span
+													className={`shrink-0 text-[9px] font-black uppercase tracking-wide px-1 py-0.5 border ${isExpanded ? "border-amber-300/60 text-amber-300" : "border-amber-300 bg-amber-50 text-amber-700"}`}
+													title={`${standing.absences} absence${standing.absences > 1 ? "s" : ""} — used as a tiebreaker`}
+												>
+													{standing.absences} ABS
+												</span>
+											)}
 										</span>
 										{standing.country && (
 											<span

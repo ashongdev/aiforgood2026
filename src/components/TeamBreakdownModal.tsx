@@ -23,6 +23,7 @@ interface RoundInfo {
   roundNum: number;
   total: number | null;
   breakdown: RoundBreakdown | null;
+  absent: boolean;
 }
 
 function ptsLabel(pts: number) {
@@ -115,7 +116,10 @@ export function TeamBreakdownModal({ teamId, teamName, category, phase, onClose 
             const breakdown = rawBd
               ? ({ ...EMPTY_BREAKDOWN, ...(rawBd as unknown as Partial<RoundBreakdown>) } as RoundBreakdown)
               : null;
-            infos.push({ matchId: m.id, opponent, phase: m.phase, roundNum: r, total: roundTotal, breakdown });
+            const absent = !!(isTeam1
+              ? (m[`team_1_r${r}_absent` as keyof typeof m] as boolean | null)
+              : (m[`team_2_r${r}_absent` as keyof typeof m] as boolean | null));
+            infos.push({ matchId: m.id, opponent, phase: m.phase, roundNum: r, total: roundTotal, breakdown, absent });
           }
         }
         setRounds(infos);
@@ -193,7 +197,11 @@ export function TeamBreakdownModal({ teamId, teamName, category, phase, onClose 
 
         {/* Mission breakdown */}
         <div className="overflow-y-auto flex-1 px-5 py-4">
-          {bd ? (
+          {selected.absent ? (
+            <div className="bg-amber-50 border border-amber-200 px-3 py-3 text-xs text-amber-700 font-semibold">
+              Team did not show up for this round — recorded as an absence (used as a ranking tiebreaker).
+            </div>
+          ) : bd ? (
             <>
               <BreakdownSection title="Mission 1 — Cultivation" items={MISSION_1_ITEMS} breakdown={bd} category={category} />
               <BreakdownSection title="Mission 2 — Harvesting" items={MISSION_2_ITEMS} breakdown={bd} category={category} />
@@ -269,12 +277,14 @@ export function TeamBreakdownModal({ teamId, teamName, category, phase, onClose 
                   <p className="text-sm font-semibold text-editorial-ink truncate">
                     vs {round.opponent}
                   </p>
-                  {!hasBreakdown && (
+                  {round.absent ? (
+                    <p className="text-[9px] text-amber-600 font-bold mt-0.5">Absent</p>
+                  ) : !hasBreakdown ? (
                     <p className="text-[9px] text-gray-300 mt-0.5">Manual entry</p>
-                  )}
+                  ) : null}
                 </div>
-                <span className={`text-2xl font-black font-mono shrink-0 ${ptsColor(displayTotal)}`}>
-                  {ptsLabel(displayTotal)}
+                <span className={`text-2xl font-black font-mono shrink-0 ${round.absent ? "text-amber-600" : ptsColor(displayTotal)}`}>
+                  {round.absent ? "ABS" : ptsLabel(displayTotal)}
                 </span>
                 <ChevronRight size={16} className="text-gray-300 shrink-0 group-hover:text-gray-500 transition-colors" />
               </button>

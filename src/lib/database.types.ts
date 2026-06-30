@@ -68,6 +68,15 @@ export interface Match {
   team_2_r2: number | null
   team_2_r3: number | null
   team_2_r4: number | null
+  // No-show flags per round (Rulebook §h.5.2) — also the #2 qualifying tiebreak (§h.3.2)
+  team_1_r1_absent: boolean
+  team_1_r2_absent: boolean
+  team_1_r3_absent: boolean
+  team_1_r4_absent: boolean
+  team_2_r1_absent: boolean
+  team_2_r2_absent: boolean
+  team_2_r3_absent: boolean
+  team_2_r4_absent: boolean
   // Aggregated points (written by frontend)
   team_1_final_points: number | null
   team_2_final_points: number | null

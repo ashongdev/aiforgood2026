@@ -73,8 +73,9 @@ function ScoringRow({
           {count}
         </span>
         <button
-          onPointerDown={(e) => { e.preventDefault(); onChange(1); }}
-          className="w-10 h-10 flex items-center justify-center rounded-r-xl bg-gray-100 active:bg-gray-200 transition-colors select-none"
+          onPointerDown={(e) => { e.preventDefault(); if (count < item.max) onChange(1); }}
+          disabled={count >= item.max}
+          className="w-10 h-10 flex items-center justify-center rounded-r-xl bg-gray-100 active:bg-gray-200 disabled:opacity-30 transition-colors select-none"
         >
           <Plus size={16} />
         </button>

@@ -36,30 +36,38 @@ export interface ScoringItem {
   label: string
   pts: (c: Category) => number
   icon: string
+  max: number
 }
 
 export const MISSION_1_ITEMS: ScoringItem[] = [
-  { key: 'm1_seeds_correct',    label: 'Seed in correct colored plot',   pts: c => c === 'Junior' ? 10 : 5,   icon: '🌱' },
-  { key: 'm1_plots_watered',    label: 'Seeded plot correctly watered',  pts: () => 30,                       icon: '💧' },
-  { key: 'm1_seeds_subdivision',label: 'Seed fully in 2×3 subdivision', pts: c => c === 'Junior' ? 0 : 10,   icon: '📦' },
-  { key: 'm1_seeds_misplaced',  label: 'Misplaced seed',                 pts: c => c === 'Junior' ? 0 : -5,  icon: '↩️' },
-  { key: 'm1_empty_watered',    label: 'Empty plot watered',             pts: c => c === 'Junior' ? 0 : -10, icon: '⚠️' },
+  // 18 seeds total (6 per size); 2 of 3 plots active → max 12 correctly placed
+  { key: 'm1_seeds_correct',    label: 'Seed in correct colored plot',   pts: c => c === 'Junior' ? 10 : 5,   icon: '🌱', max: 12 },
+  // Only 2 plots are active per match
+  { key: 'm1_plots_watered',    label: 'Seeded plot correctly watered',  pts: () => 30,                       icon: '💧', max: 2  },
+  // Senior bonus: seed fully within its 2×3 cell — same physical limit as seeds_correct
+  { key: 'm1_seeds_subdivision',label: 'Seed fully in 2×3 subdivision', pts: c => c === 'Junior' ? 0 : 10,   icon: '📦', max: 12 },
+  // All 18 seeds could be misplaced
+  { key: 'm1_seeds_misplaced',  label: 'Misplaced seed',                 pts: c => c === 'Junior' ? 0 : -5,  icon: '↩️', max: 18 },
+  // 3 gates total; inactive plot + potentially active plots with no seeds
+  { key: 'm1_empty_watered',    label: 'Empty plot watered',             pts: c => c === 'Junior' ? 0 : -10, icon: '⚠️', max: 3  },
 ]
 
 export const MISSION_2_ITEMS: ScoringItem[] = [
-  { key: 'm2_fruits_moved',    label: 'Red/black fruit moved from circle', pts: () => 5,                       icon: '🍎' },
-  { key: 'm2_red_in_fruits',   label: 'Red fruit → Fruits zone',           pts: () => 5,                       icon: '🔴' },
-  { key: 'm2_black_in_waste',  label: 'Black fruit → Waste zone',          pts: () => 10,                      icon: '⚫' },
-  { key: 'm2_red_in_waste',    label: 'Red fruit → Waste zone',            pts: c => c === 'Junior' ? 0 : -5,  icon: '🗑️'  },
-  { key: 'm2_black_in_fruits', label: 'Black fruit → Fruits zone',         pts: c => c === 'Junior' ? 0 : -10, icon: '🚫' },
-  { key: 'm2_green_moved',     label: 'Green fruit moved',                 pts: c => c === 'Junior' ? 0 : -5,  icon: '🟢' },
+  // 6 red + 6 black fruits on adhesive circles
+  { key: 'm2_fruits_moved',    label: 'Red/black fruit moved from circle', pts: () => 5,                       icon: '🍎', max: 12 },
+  { key: 'm2_red_in_fruits',   label: 'Red fruit → Fruits zone',           pts: () => 5,                       icon: '🔴', max: 6  },
+  { key: 'm2_black_in_waste',  label: 'Black fruit → Waste zone',          pts: () => 10,                      icon: '⚫', max: 6  },
+  { key: 'm2_red_in_waste',    label: 'Red fruit → Waste zone',            pts: c => c === 'Junior' ? 0 : -5,  icon: '🗑️', max: 6  },
+  { key: 'm2_black_in_fruits', label: 'Black fruit → Fruits zone',         pts: c => c === 'Junior' ? 0 : -10, icon: '🚫', max: 6  },
+  { key: 'm2_green_moved',     label: 'Green fruit moved',                 pts: c => c === 'Junior' ? 0 : -5,  icon: '🟢', max: 6  },
 ]
 
 export const PENALTY_ITEMS: ScoringItem[] = [
-  { key: 'p_unauthorized',  label: 'Unauthorized robot interaction',  pts: () => -20, icon: '🤖' },
-  { key: 'p_field_manip',   label: 'Field / piece manipulation',      pts: () => -20, icon: '✋' },
-  { key: 'p_seeds_outside', label: 'Seeds passed outside start zone', pts: () => -20, icon: '📍' },
-  { key: 'p_robot_exit',    label: 'Robot exits field',               pts: () => -20, icon: '🚨' },
+  // No explicit cap in rulebook; 3 per type is a safe ceiling for a 2-minute match
+  { key: 'p_unauthorized',  label: 'Unauthorized robot interaction',  pts: () => -20, icon: '🤖', max: 3 },
+  { key: 'p_field_manip',   label: 'Field / piece manipulation',      pts: () => -20, icon: '✋', max: 3 },
+  { key: 'p_seeds_outside', label: 'Seeds passed outside start zone', pts: () => -20, icon: '📍', max: 3 },
+  { key: 'p_robot_exit',    label: 'Robot exits field',               pts: () => -20, icon: '🚨', max: 3 },
 ]
 
 export const ALL_SCORING_ITEMS: ScoringItem[] = [

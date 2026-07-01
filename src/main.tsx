@@ -46,15 +46,8 @@ createRoot(document.getElementById("root")!).render(
 						}
 					/>
 
-					{/* MC view — requires 'mc' or 'admin' role */}
-					<Route
-						path="/mc"
-						element={
-							<ProtectedRoute allowedRoles={["mc", "admin"]}>
-								<MCPage />
-							</ProtectedRoute>
-						}
-					/>
+					{/* MC view — public, no login required */}
+					<Route path="/mc" element={<MCPage />} />
 
 					{/* Admin dashboard — requires 'admin' role */}
 					<Route

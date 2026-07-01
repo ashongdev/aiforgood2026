@@ -3361,7 +3361,7 @@ function ScoreekeepersTab() {
 							<CustomSelect
 								value={addRole}
 								options={[
-									{ value: "scorekeeper", label: "Scorekeeper" },
+									{ value: "scorekeeper", label: "Chief Judge" },
 									{ value: "referee", label: "Referee" },
 									{ value: "mc", label: "MC" },
 								]}
@@ -3456,7 +3456,7 @@ function ScoreekeepersTab() {
 								className="border border-gray-200 px-2.5 py-1.5 text-xs focus:outline-none focus:border-editorial-gold text-editorial-ink bg-white"
 							>
 								<option value="">All roles</option>
-								<option value="scorekeeper">Scorekeeper</option>
+								<option value="scorekeeper">Chief Judge</option>
 								<option value="referee">Referee</option>
 								<option value="mc">MC</option>
 							</select>
@@ -3556,7 +3556,7 @@ function ScoreekeepersTab() {
 												? "text-purple-700 border-purple-200 bg-purple-50"
 												: "text-gray-500 border-gray-200 bg-gray-50"
 										}`}>
-											{sk.role === "referee" ? "Referee" : sk.role === "mc" ? "MC" : "Scorekeeper"}
+											{sk.role === "referee" ? "Referee" : sk.role === "mc" ? "MC" : "Chief Judge"}
 										</span>
 									</td>
 									<td className="px-4 py-2.5">
@@ -3799,7 +3799,7 @@ function ScoreekeepersTab() {
 												<CustomSelect
 													value={row.role}
 													disabled={isBulkImporting || row.status === "ok"}
-													options={[{ value: "scorekeeper", label: "Scorekeeper" }, { value: "referee", label: "Referee" }]}
+													options={[{ value: "scorekeeper", label: "Chief Judge" }, { value: "referee", label: "Referee" }]}
 													onChange={(v) => setBulkRows((prev) => prev.map((r, idx) => idx === i ? { ...r, role: v as "scorekeeper" | "referee" } : r))}
 													showSearch={false}
 												/>

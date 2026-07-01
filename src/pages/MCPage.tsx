@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { LogOut, Mic, RefreshCw, Search, Loader2 } from "lucide-react";
-import { Navigate } from "react-router-dom";
-import { useAuth } from "../contexts/AuthContext";
+import { Mic, RefreshCw, Search, Loader2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { CustomSelect } from "../components/CustomSelect";
 import { getCountryFlag } from "../lib/countryFlag";
@@ -173,26 +171,12 @@ function MatchCard({ match }: { match: MatchWithTeams }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function MCPage() {
-	const { profile, isLoading: authLoading, signOut } = useAuth();
-
 	const [matches, setMatches] = useState<MatchWithTeams[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
 	const [category, setCategory] = useState<Category | "All">("All");
 	const [phaseFilter, setPhaseFilter] = useState<Phase | "All">("All");
 	const [search, setSearch] = useState("");
 	const [isRefreshing, setIsRefreshing] = useState(false);
-
-	if (authLoading) {
-		return (
-			<div className="min-h-screen bg-editorial-ink flex items-center justify-center">
-				<Loader2 size={32} className="animate-spin text-editorial-gold" />
-			</div>
-		);
-	}
-
-	if (!profile) {
-		return <Navigate to="/login" replace />;
-	}
 
 	async function loadMatches() {
 		setIsLoading(true);
@@ -210,7 +194,6 @@ export function MCPage() {
 		loadMatches();
 	}, []);
 
-	// eslint-disable-next-line react-hooks/rules-of-hooks
 	const filtered = useMemo(() => {
 		return matches.filter((m) => {
 			if (category !== "All" && m.category !== category) return false;
@@ -226,7 +209,6 @@ export function MCPage() {
 	}, [matches, category, phaseFilter, search]);
 
 	// Group by phase
-	// eslint-disable-next-line react-hooks/rules-of-hooks
 	const grouped = useMemo(() => {
 		const map = new Map<Phase, MatchWithTeams[]>();
 		for (const m of filtered) {
@@ -238,7 +220,6 @@ export function MCPage() {
 	}, [filtered]);
 
 	// Live matches for the banner
-	// eslint-disable-next-line react-hooks/rules-of-hooks
 	const liveMatches = useMemo(() => matches.filter((m) => matchStatus(m) === "live"), [matches]);
 
 	async function handleRefresh() {
@@ -276,21 +257,13 @@ export function MCPage() {
 						))}
 					</div>
 
-					<div className="flex items-center gap-2">
-						<button
-							onClick={handleRefresh}
-							disabled={isRefreshing}
-							className="p-1.5 text-white/60 hover:text-editorial-gold transition-colors disabled:opacity-40"
-						>
-							<RefreshCw size={14} className={isRefreshing ? "animate-spin" : ""} />
-						</button>
-						<button
-							onClick={signOut}
-							className="p-1.5 text-white/60 hover:text-red-400 transition-colors"
-						>
-							<LogOut size={14} />
-						</button>
-					</div>
+					<button
+						onClick={handleRefresh}
+						disabled={isRefreshing}
+						className="p-1.5 text-white/60 hover:text-editorial-gold transition-colors disabled:opacity-40"
+					>
+						<RefreshCw size={14} className={isRefreshing ? "animate-spin" : ""} />
+					</button>
 				</div>
 			</header>
 

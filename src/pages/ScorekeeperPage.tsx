@@ -532,7 +532,7 @@ export function ScorekeeperPage() {
 					Access Suspended
 				</h1>
 				<p className="text-white/50 text-sm max-w-xs leading-relaxed">
-					Your scorekeeper access has been temporarily suspended by
+					Your Chief Judge access has been temporarily suspended by
 					the tournament administrator. Please reach out to them to
 					regain access.
 				</p>

@@ -262,17 +262,18 @@ export function QualifiersTable({
 									<div className="bg-white border-t border-editorial-ink/10 px-4 py-4">
 										<div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
 											{[
-												{ label: "Round 1", score: standing.r1, opp: standing.opp_r1 },
-												{ label: "Round 2", score: standing.r2, opp: standing.opp_r2 },
-												{ label: "Round 3", score: standing.r3, opp: standing.opp_r3 },
-												{ label: "Round 4", score: standing.r4, opp: standing.opp_r4 },
+												{ label: "Round 1", short: "R1", score: standing.r1, opp: standing.opp_r1 },
+												{ label: "Round 2", short: "R2", score: standing.r2, opp: standing.opp_r2 },
+												{ label: "Round 3", short: "R3", score: standing.r3, opp: standing.opp_r3 },
+												{ label: "Round 4", short: "R4", score: standing.r4, opp: standing.opp_r4 },
 											].map((round) => (
 												<div
 													key={round.label}
-													className="flex items-center justify-between sm:flex-col sm:items-center sm:justify-center p-3 bg-gray-50 border border-editorial-ink/15 sm:text-center"
+													className="flex flex-col items-center justify-center p-3 bg-gray-50 border border-editorial-ink/15 text-center"
 												>
 													<p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-														{round.label}
+														<span className="sm:hidden">{round.short}</span>
+														<span className="hidden sm:inline">{round.label}</span>
 													</p>
 													<p className="text-xl font-black text-editorial-ink">
 														<AnimatedScore
@@ -284,7 +285,7 @@ export function QualifiersTable({
 														/>
 													</p>
 													{round.opp && (
-														<p className="text-[9px] text-gray-400 mt-0.5 truncate w-full sm:text-center" title={`vs ${round.opp}`}>
+														<p className="text-[9px] text-gray-400 mt-0.5 truncate w-full text-center" title={`vs ${round.opp}`}>
 															vs {round.opp}
 														</p>
 													)}

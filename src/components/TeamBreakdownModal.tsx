@@ -71,7 +71,8 @@ function BreakdownSection({
                 <span className="text-base w-6 text-center">{item.icon}</span>
                 <span className="flex-1 text-editorial-ink">{item.label}</span>
                 <span className="text-gray-400 text-xs">×{count}</span>
-                <span className={`font-bold text-xs w-12 text-right ${ptsColor(contrib)}`}>
+                <span className={`text-[10px] w-10 text-right ${ptsColor(pts)} opacity-60`}>{ptsLabel(pts)}pt</span>
+                <span className={`font-bold text-xs w-10 text-right ${ptsColor(contrib)}`}>
                   {ptsLabel(contrib)}
                 </span>
               </div>

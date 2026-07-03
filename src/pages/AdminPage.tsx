@@ -3062,7 +3062,7 @@ function ScoreekeepersTab() {
 	const [addOpen, setAddOpen] = useState(false);
 	const [addEmail, setAddEmail] = useState("");
 	const [addTable, setAddTable] = useState("");
-	const [addRole, setAddRole] = useState<"scorekeeper" | "referee" | "mc">("scorekeeper");
+	const [addRole, setAddRole] = useState<"scorekeeper" | "referee" | "mc" | "admin">("scorekeeper");
 	const [isAdding, setIsAdding] = useState(false);
 	const [addError, setAddError] = useState<string | null>(null);
 	const [newCred, setNewCred] = useState<{
@@ -3084,11 +3084,11 @@ function ScoreekeepersTab() {
 	const [rowCopied, setRowCopied] = useState<string | null>(null);
 	const [staffSearchOpen, setStaffSearchOpen] = useState(false);
 	const [staffQuery, setStaffQuery] = useState("");
-	const [staffRoleFilter, setStaffRoleFilter] = useState<"" | "scorekeeper" | "referee" | "mc">("");
+	const [staffRoleFilter, setStaffRoleFilter] = useState<"" | "scorekeeper" | "referee" | "mc" | "admin">("");
 	const [staffTableFilter, setStaffTableFilter] = useState("");
 
 	// Bulk import state
-	type BulkStaffRow = { email: string; role: "scorekeeper" | "referee" | "mc"; table_number: string; status: "pending" | "ok" | "error"; message: string };
+	type BulkStaffRow = { email: string; role: "scorekeeper" | "referee" | "mc" | "admin"; table_number: string; status: "pending" | "ok" | "error"; message: string };
 	const [bulkOpen, setBulkOpen] = useState(false);
 	const [bulkRows, setBulkRows] = useState<BulkStaffRow[]>([]);
 	const [isBulkImporting, setIsBulkImporting] = useState(false);
@@ -3103,7 +3103,7 @@ function ScoreekeepersTab() {
 			const cols = line.split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
 			return {
 				email: cols[0] ?? "",
-				role: (cols[1] === "referee" ? "referee" : cols[1] === "mc" ? "mc" : "scorekeeper") as "scorekeeper" | "referee" | "mc",
+				role: (cols[1] === "referee" ? "referee" : cols[1] === "mc" ? "mc" : cols[1] === "admin" ? "admin" : "scorekeeper") as "scorekeeper" | "referee" | "mc" | "admin",
 				table_number: cols[2] ?? "",
 				status: "pending" as const,
 				message: "",
@@ -3144,7 +3144,7 @@ function ScoreekeepersTab() {
 		const { data } = await supabase
 			.from("user_profiles")
 			.select("id, email, table_number, created_at, role, locked, temp_password, must_change_password")
-			.in("role", ["scorekeeper", "referee", "mc"])
+			.in("role", ["scorekeeper", "referee", "mc", "admin"])
 			.order("created_at", { ascending: false });
 		setScorekeepers((data as ScorekeeperProfile[]) ?? []);
 		setIsLoading(false);
@@ -3364,8 +3364,9 @@ function ScoreekeepersTab() {
 									{ value: "scorekeeper", label: "Chief Judge" },
 									{ value: "referee", label: "Referee" },
 									{ value: "mc", label: "MC" },
+									{ value: "admin", label: "Admin" },
 								]}
-								onChange={(v) => setAddRole(v as "scorekeeper" | "referee" | "mc")}
+								onChange={(v) => setAddRole(v as "scorekeeper" | "referee" | "mc" | "admin")}
 								showSearch={false}
 							/>
 						</div>
@@ -3459,6 +3460,7 @@ function ScoreekeepersTab() {
 								<option value="scorekeeper">Chief Judge</option>
 								<option value="referee">Referee</option>
 								<option value="mc">MC</option>
+								<option value="admin">Admin</option>
 							</select>
 						</div>
 						<div className="space-y-1">
@@ -3554,9 +3556,11 @@ function ScoreekeepersTab() {
 												? "text-blue-700 border-blue-200 bg-blue-50"
 												: sk.role === "mc"
 												? "text-purple-700 border-purple-200 bg-purple-50"
+												: sk.role === "admin"
+												? "text-editorial-gold border-editorial-gold/30 bg-editorial-gold/10"
 												: "text-gray-500 border-gray-200 bg-gray-50"
 										}`}>
-											{sk.role === "referee" ? "Referee" : sk.role === "mc" ? "MC" : "Chief Judge"}
+											{sk.role === "referee" ? "Referee" : sk.role === "mc" ? "MC" : sk.role === "admin" ? "Admin" : "Chief Judge"}
 										</span>
 									</td>
 									<td className="px-4 py-2.5">

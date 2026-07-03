@@ -1,4 +1,4 @@
-const CACHE = "aiforgood-shell-v2";
+const CACHE = "aiforgood-shell-v3";
 
 // On install: cache the app shell (index.html)
 self.addEventListener("install", (evt) => {

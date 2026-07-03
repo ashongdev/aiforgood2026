@@ -20,7 +20,7 @@ export interface UserProfile {
 
 export interface ScorekeeperProfile {
   id: string
-  role: 'scorekeeper' | 'referee' | 'mc'
+  role: 'scorekeeper' | 'referee' | 'mc' | 'admin'
   table_number: number | null
   email: string | null
   locked: boolean

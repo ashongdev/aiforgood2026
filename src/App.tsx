@@ -43,19 +43,25 @@ function computeSpectatorStandings(matches: MatchWithTeams[], rankByTotal = fals
 	const map = new Map<string, {
 		team_name: string;
 		country: string | null;
+		category: string;
 		r1: number | null; r2: number | null; r3: number | null; r4: number | null;
+		opp_r1: string | null; opp_r2: string | null; opp_r3: string | null; opp_r4: string | null;
 		best_round: number; total: number; absences: number;
 	}>();
 
 	function processTeam(
 		id: string | null, team: { team_name: string; country?: string | null } | null,
+		category: string,
 		r1: number | null, r2: number | null, r3: number | null, r4: number | null,
 		a1: boolean, a2: boolean, a3: boolean, a4: boolean,
+		opponent: { team_name: string } | null,
 	) {
 		if (!id || !team) return;
 		const scored = [r1, r2, r3, r4].filter((v): v is number => v !== null && v > 0);
-		const e = map.get(id) ?? { team_name: tc(team.team_name), country: tc(team.country), r1: null, r2: null, r3: null, r4: null, best_round: 0, total: 0, absences: 0 };
-		if (e.r1 === null && r1 !== null) e.r1 = r1;
+		const e = map.get(id) ?? { team_name: tc(team.team_name), country: tc(team.country), category, r1: null, r2: null, r3: null, r4: null, opp_r1: null, opp_r2: null, opp_r3: null, opp_r4: null, best_round: 0, total: 0, absences: 0 };
+		// opp_r1 is the system-generated R1 pairing from the DB
+		if (e.r1 === null && r1 !== null) { e.r1 = r1; e.opp_r1 = opponent ? tc(opponent.team_name) : null; }
+		// R2-R4 opponent names are computed from standings below — not from DB
 		if (e.r2 === null && r2 !== null) e.r2 = r2;
 		if (e.r3 === null && r3 !== null) e.r3 = r3;
 		if (e.r4 === null && r4 !== null) e.r4 = r4;
@@ -68,11 +74,35 @@ function computeSpectatorStandings(matches: MatchWithTeams[], rankByTotal = fals
 	}
 
 	for (const m of matches) {
-		processTeam(m.team_1_id, m.team_1, m.team_1_r1, m.team_1_r2, m.team_1_r3, m.team_1_r4,
-			m.team_1_r1_absent, m.team_1_r2_absent, m.team_1_r3_absent, m.team_1_r4_absent);
-		processTeam(m.team_2_id, m.team_2, m.team_2_r1, m.team_2_r2, m.team_2_r3, m.team_2_r4,
-			m.team_2_r1_absent, m.team_2_r2_absent, m.team_2_r3_absent, m.team_2_r4_absent);
+		processTeam(m.team_1_id, m.team_1, m.category, m.team_1_r1, m.team_1_r2, m.team_1_r3, m.team_1_r4,
+			m.team_1_r1_absent, m.team_1_r2_absent, m.team_1_r3_absent, m.team_1_r4_absent, m.team_2);
+		processTeam(m.team_2_id, m.team_2, m.category, m.team_2_r1, m.team_2_r2, m.team_2_r3, m.team_2_r4,
+			m.team_2_r1_absent, m.team_2_r2_absent, m.team_2_r3_absent, m.team_2_r4_absent, m.team_1);
 	}
+
+	// Compute R2/R3/R4 opponents from standings-based pairings (1st vs last, 2nd vs 2nd-to-last, …)
+	// These rounds are NOT stored in the DB — pairings are re-generated each round from live standings
+	function applyComputedOpponents(
+		roundKey: 'opp_r2' | 'opp_r3' | 'opp_r4',
+		prevScore: (e: { r1: number | null; r2: number | null; r3: number | null }) => number,
+	) {
+		const cats = [...new Set(Array.from(map.values()).map(e => e.category))];
+		for (const cat of cats) {
+			const catEntries = Array.from(map.entries()).filter(([, e]) => e.category === cat);
+			catEntries.sort(([, a], [, b]) => prevScore(b) - prevScore(a));
+			const n = catEntries.length;
+			for (let i = 0; i < Math.floor(n / 2); i++) {
+				const [id1, e1] = catEntries[i];
+				const [id2, e2] = catEntries[n - 1 - i];
+				map.get(id1)![roundKey] = e2.team_name;
+				map.get(id2)![roundKey] = e1.team_name;
+			}
+		}
+	}
+
+	applyComputedOpponents('opp_r2', e => e.r1 ?? 0);
+	applyComputedOpponents('opp_r3', e => (e.r1 ?? 0) + (e.r2 ?? 0));
+	applyComputedOpponents('opp_r4', e => (e.r1 ?? 0) + (e.r2 ?? 0) + (e.r3 ?? 0));
 
 	return Array.from(map.entries())
 		.sort(([, a], [, b]) => {

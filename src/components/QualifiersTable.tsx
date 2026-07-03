@@ -15,6 +15,10 @@ export interface SpectatorStanding {
 	r2: number | null;
 	r3: number | null;
 	r4: number | null;
+	opp_r1: string | null;
+	opp_r2: string | null;
+	opp_r3: string | null;
+	opp_r4: string | null;
 	best_round: number;
 	total: number;
 	absences?: number;
@@ -258,22 +262,10 @@ export function QualifiersTable({
 									<div className="bg-white border-t border-editorial-ink/10 px-4 py-4">
 										<div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
 											{[
-												{
-													label: "Round 1",
-													score: standing.r1,
-												},
-												{
-													label: "Round 2",
-													score: standing.r2,
-												},
-												{
-													label: "Round 3",
-													score: standing.r3,
-												},
-												{
-													label: "Round 4",
-													score: standing.r4,
-												},
+												{ label: "Round 1", score: standing.r1, opp: standing.opp_r1 },
+												{ label: "Round 2", score: standing.r2, opp: standing.opp_r2 },
+												{ label: "Round 3", score: standing.r3, opp: standing.opp_r3 },
+												{ label: "Round 4", score: standing.r4, opp: standing.opp_r4 },
 											].map((round) => (
 												<div
 													key={round.label}
@@ -285,15 +277,17 @@ export function QualifiersTable({
 													<p className="text-xl font-black text-editorial-ink">
 														<AnimatedScore
 															value={
-																round.score !==
-																null
-																	? String(
-																			round.score,
-																		)
+																round.score !== null
+																	? String(round.score)
 																	: "0"
 															}
 														/>
 													</p>
+													{round.opp && (
+														<p className="text-[9px] text-gray-400 mt-0.5 truncate w-full sm:text-center" title={`vs ${round.opp}`}>
+															vs {round.opp}
+														</p>
+													)}
 												</div>
 											))}
 										</div>

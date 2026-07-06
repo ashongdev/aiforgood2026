@@ -49,6 +49,7 @@ const COUNTRY_CODES: Record<string, string> = {
 	ARGENTINA: "AR",
 	CHILE: "CL",
 	COLOMBIA: "CO",
+	COLUMBIA: "CO",
 	PERU: "PE",
 	MEXICO: "MX",
 	VENEZUELA: "VE",

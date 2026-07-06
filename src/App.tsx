@@ -43,6 +43,7 @@ function computeSpectatorStandings(matches: MatchWithTeams[], rankByTotal = fals
 	const map = new Map<string, {
 		team_name: string;
 		country: string | null;
+		booth_number: number | null;
 		category: string;
 		r1: number | null; r2: number | null; r3: number | null; r4: number | null;
 		opp_r1: string | null; opp_r2: string | null; opp_r3: string | null; opp_r4: string | null;
@@ -50,7 +51,7 @@ function computeSpectatorStandings(matches: MatchWithTeams[], rankByTotal = fals
 	}>();
 
 	function processTeam(
-		id: string | null, team: { team_name: string; country?: string | null } | null,
+		id: string | null, team: { team_name: string; country?: string | null; booth_number?: number | null } | null,
 		category: string,
 		r1: number | null, r2: number | null, r3: number | null, r4: number | null,
 		a1: boolean, a2: boolean, a3: boolean, a4: boolean,
@@ -58,7 +59,7 @@ function computeSpectatorStandings(matches: MatchWithTeams[], rankByTotal = fals
 	) {
 		if (!id || !team) return;
 		const scored = [r1, r2, r3, r4].filter((v): v is number => v !== null && v > 0);
-		const e = map.get(id) ?? { team_name: tc(team.team_name), country: tc(team.country), category, r1: null, r2: null, r3: null, r4: null, opp_r1: null, opp_r2: null, opp_r3: null, opp_r4: null, best_round: 0, total: 0, absences: 0 };
+		const e = map.get(id) ?? { team_name: tc(team.team_name), country: tc(team.country), booth_number: team.booth_number ?? null, category, r1: null, r2: null, r3: null, r4: null, opp_r1: null, opp_r2: null, opp_r3: null, opp_r4: null, best_round: 0, total: 0, absences: 0 };
 		// opp_r1 is the system-generated R1 pairing from the DB
 		if (e.r1 === null && r1 !== null) { e.r1 = r1; e.opp_r1 = opponent ? tc(opponent.team_name) : null; }
 		// R2-R4 opponent names are computed from standings below — not from DB
@@ -218,7 +219,7 @@ export default function App() {
 			const [matchRes, teamRes] = await Promise.all([
 				supabase
 					.from("matches")
-					.select("*, team_1:team_1_id(id,team_name,category,country), team_2:team_2_id(id,team_name,category,country), winner:winner_id(id,team_name,category)")
+					.select("*, team_1:team_1_id(id,team_name,category,country,booth_number), team_2:team_2_id(id,team_name,category,country,booth_number), winner:winner_id(id,team_name,category)")
 					.eq("phase", currentPhase)
 					.eq("category", supabaseCategory)
 					.order("match_order", { ascending: true }),

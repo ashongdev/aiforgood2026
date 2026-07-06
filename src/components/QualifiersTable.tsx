@@ -11,6 +11,7 @@ export interface SpectatorStanding {
 	team_name: string;
 	teamId?: string;
 	country?: string | null;
+	booth_number?: number | null;
 	r1: number | null;
 	r2: number | null;
 	r3: number | null;
@@ -199,6 +200,14 @@ export function QualifiersTable({
 											>
 												{standing.team_name}
 											</span>
+											{!!standing.booth_number && (
+												<span
+													className={`shrink-0 text-[9px] font-black font-mono px-1 py-0.5 border ${isExpanded ? "border-white/30 text-white/70" : "border-editorial-ink/20 text-gray-400 bg-gray-50"}`}
+													title={`Booth #${standing.booth_number}`}
+												>
+													#{standing.booth_number}
+												</span>
+											)}
 											{!!standing.absences && (
 												<span
 													className={`shrink-0 text-[9px] font-black uppercase tracking-wide px-1 py-0.5 border ${isExpanded ? "border-amber-300/60 text-amber-300" : "border-amber-300 bg-amber-50 text-amber-700"}`}

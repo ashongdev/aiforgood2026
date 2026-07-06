@@ -103,7 +103,7 @@ function buildPairings(teams: TeamEntry[]): RoundPairing[] {
 function pairingToMatch(pairing: RoundPairing, cat: Category): MatchWithTeams {
 	const makeTeam = (t: TeamEntry): Team => ({
 		id: t.id, team_name: t.name, category: cat, country: t.country,
-		coach_name: null, team_description: null, team_members: null, created_at: "",
+		coach_name: null, team_description: null, team_members: null, booth_number: null, created_at: "",
 	});
 	return {
 		id: `computed-${pairing.t1.id}`,
@@ -186,8 +186,13 @@ function MatchRow({ match }: { match: MatchWithTeams }) {
 								</span>
 							)}
 						</div>
-						{team1?.country && (
-							<p className="text-[9px] text-gray-400 mt-0.5 truncate">{tc(team1.country)}</p>
+						{(team1?.country || (team1 as { booth_number?: number | null } | null)?.booth_number) && (
+							<p className="text-[9px] text-gray-400 mt-0.5 truncate">
+								{team1?.country ? tc(team1.country) : ""}
+								{(team1 as { booth_number?: number | null } | null)?.booth_number ? (
+									<span className="font-mono ml-1">#{(team1 as { booth_number?: number | null }).booth_number}</span>
+								) : null}
+							</p>
 						)}
 					</div>
 
@@ -209,8 +214,13 @@ function MatchRow({ match }: { match: MatchWithTeams }) {
 								<span className="text-base leading-none shrink-0">{getCountryFlag(team2?.country)}</span>
 							)}
 						</div>
-						{team2?.country && (
-							<p className="text-[9px] text-gray-400 mt-0.5 truncate">{tc(team2.country)}</p>
+						{(team2?.country || (team2 as { booth_number?: number | null } | null)?.booth_number) && (
+							<p className="text-[9px] text-gray-400 mt-0.5 truncate">
+								{(team2 as { booth_number?: number | null } | null)?.booth_number ? (
+									<span className="font-mono mr-1">#{(team2 as { booth_number?: number | null }).booth_number}</span>
+								) : null}
+								{team2?.country ? tc(team2.country) : ""}
+							</p>
 						)}
 					</div>
 				</div>
@@ -242,7 +252,7 @@ export function MCPage() {
 		setIsLoading(true);
 		const { data } = await supabase
 			.from("matches")
-			.select("*, team_1:team_1_id(id,team_name,category,country), team_2:team_2_id(id,team_name,category,country), winner:winner_id(id,team_name,category)")
+			.select("*, team_1:team_1_id(id,team_name,category,country,booth_number), team_2:team_2_id(id,team_name,category,country,booth_number), winner:winner_id(id,team_name,category)")
 			.order("phase", { ascending: true })
 			.order("match_order", { ascending: true });
 		const rows = (data as MatchWithTeams[]) ?? [];
@@ -261,7 +271,7 @@ export function MCPage() {
 	async function refreshMatches() {
 		const { data } = await supabase
 			.from("matches")
-			.select("*, team_1:team_1_id(id,team_name,category,country), team_2:team_2_id(id,team_name,category,country), winner:winner_id(id,team_name,category)")
+			.select("*, team_1:team_1_id(id,team_name,category,country,booth_number), team_2:team_2_id(id,team_name,category,country,booth_number), winner:winner_id(id,team_name,category)")
 			.order("phase", { ascending: true })
 			.order("match_order", { ascending: true });
 		if (data) setMatches(data as MatchWithTeams[]);

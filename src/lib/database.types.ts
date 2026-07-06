@@ -50,6 +50,7 @@ export interface Team {
   coach_name: string | null
   team_description: string | null
   team_members: string[] | null
+  booth_number: number | null
   created_at: string
 }
 

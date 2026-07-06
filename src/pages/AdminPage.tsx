@@ -10,6 +10,7 @@ import {
 	Loader2,
 	Lock,
 	LogOut,
+	MapPin,
 	Pencil,
 	Plus,
 	RefreshCw,
@@ -1714,6 +1715,9 @@ function TeamsTab({
 
 	return (
 		<>
+			{/* Booth Assignment panel — global, shown above per-category teams */}
+			<BoothAssignmentPanel />
+
 			{/* Stats strip + search */}
 			<div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest text-gray-400 px-1 pb-1 flex-wrap">
 				<Users size={11} />
@@ -2387,6 +2391,217 @@ function TeamsTab({
 				</div>
 			</CollapsiblePanel>
 		</>
+	);
+}
+
+// ─── BoothAssignmentPanel ──────────────────────────────────────────────────────
+
+const BOOTH_MIN = 600;
+const BOOTH_MAX = 667;
+
+function BoothAssignmentPanel() {
+	const [allTeams, setAllTeams] = useState<Team[]>([]);
+	const [boothEdits, setBoothEdits] = useState<Record<string, string>>({});
+	const [savingId, setSavingId] = useState<string | null>(null);
+	const [saveError, setSaveError] = useState<Record<string, string>>({});
+	const [isAutoAssigning, setIsAutoAssigning] = useState(false);
+	const [autoError, setAutoError] = useState<string | null>(null);
+	const [open, setOpen] = useState(false);
+
+	async function loadAllTeams() {
+		const { data } = await supabase
+			.from("teams")
+			.select("id,team_name,category,country,booth_number")
+			.order("country", { ascending: true })
+			.order("category", { ascending: true })
+			.order("team_name", { ascending: true });
+		const rows = (data as Team[]) ?? [];
+		setAllTeams(rows);
+		const edits: Record<string, string> = {};
+		for (const t of rows) {
+			edits[t.id] = t.booth_number != null ? String(t.booth_number) : "";
+		}
+		setBoothEdits(edits);
+	}
+
+	useEffect(() => { loadAllTeams(); }, []);
+
+	async function handleSaveOne(teamId: string) {
+		const raw = boothEdits[teamId]?.trim();
+		const num = raw ? parseInt(raw, 10) : null;
+		if (num !== null && (isNaN(num) || num < BOOTH_MIN || num > BOOTH_MAX)) {
+			setSaveError(e => ({ ...e, [teamId]: `Must be ${BOOTH_MIN}–${BOOTH_MAX}` }));
+			return;
+		}
+		setSaveError(e => ({ ...e, [teamId]: "" }));
+		setSavingId(teamId);
+		const { error } = await supabase
+			.from("teams")
+			.update({ booth_number: num })
+			.eq("id", teamId);
+		setSavingId(null);
+		if (error) {
+			setSaveError(e => ({ ...e, [teamId]: error.message }));
+		} else {
+			await loadAllTeams();
+		}
+	}
+
+	async function handleAutoAssign() {
+		setAutoError(null);
+		const unassigned = allTeams.filter(t => {
+			const v = boothEdits[t.id]?.trim();
+			return !v;
+		});
+		if (unassigned.length === 0) {
+			setAutoError("All teams already have booth numbers.");
+			return;
+		}
+
+		const taken = new Set(
+			allTeams
+				.map(t => {
+					const v = boothEdits[t.id]?.trim();
+					return v ? parseInt(v, 10) : null;
+				})
+				.filter((n): n is number => n !== null && !isNaN(n)),
+		);
+
+		const available: number[] = [];
+		for (let i = BOOTH_MIN; i <= BOOTH_MAX; i++) {
+			if (!taken.has(i)) available.push(i);
+		}
+
+		// Fisher-Yates shuffle
+		for (let i = available.length - 1; i > 0; i--) {
+			const j = Math.floor(Math.random() * (i + 1));
+			[available[i], available[j]] = [available[j], available[i]];
+		}
+
+		if (available.length < unassigned.length) {
+			setAutoError(`Only ${available.length} numbers left in ${BOOTH_MIN}–${BOOTH_MAX} but ${unassigned.length} teams need assignment.`);
+			return;
+		}
+
+		setIsAutoAssigning(true);
+		await Promise.all(
+			unassigned.map((t, idx) =>
+				supabase.from("teams").update({ booth_number: available[idx] }).eq("id", t.id),
+			),
+		);
+		setIsAutoAssigning(false);
+		await loadAllTeams();
+	}
+
+	const assignedCount = allTeams.filter(t => t.booth_number != null).length;
+
+	return (
+		<div className="border-2 border-editorial-ink bg-white">
+			<button
+				onClick={() => setOpen(v => !v)}
+				className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-editorial-gold/10 transition-colors"
+			>
+				<MapPin size={14} className="text-editorial-gold shrink-0" />
+				<span className="text-xs font-black uppercase tracking-widest flex-1">
+					Booth Assignments
+				</span>
+				<span className="text-[10px] text-gray-400 font-mono mr-2">
+					{assignedCount}/{allTeams.length} assigned · range {BOOTH_MIN}–{BOOTH_MAX}
+				</span>
+				{open ? <ChevronUp size={14} className="shrink-0 text-gray-400" /> : <ChevronDown size={14} className="shrink-0 text-gray-400" />}
+			</button>
+
+			{open && (
+				<div className="border-t border-editorial-ink/10 px-4 pb-4 pt-3 space-y-3">
+					{/* Auto-assign button */}
+					<div className="flex items-center justify-between gap-3 flex-wrap">
+						<p className="text-[11px] text-gray-500">
+							Manually enter booth numbers or auto-assign remaining teams randomly within {BOOTH_MIN}–{BOOTH_MAX}.
+						</p>
+						<button
+							onClick={handleAutoAssign}
+							disabled={isAutoAssigning}
+							className="flex items-center gap-2 px-4 py-2 bg-editorial-ink text-white text-xs font-black uppercase tracking-widest hover:bg-editorial-gold hover:text-editorial-ink disabled:opacity-50 transition-colors shrink-0"
+						>
+							{isAutoAssigning ? <Loader2 size={13} className="animate-spin" /> : <MapPin size={13} />}
+							Auto-Assign Remaining
+						</button>
+					</div>
+					{autoError && (
+						<p className="text-xs text-red-600 font-semibold">{autoError}</p>
+					)}
+
+					{/* Team table */}
+					<div className="overflow-x-auto">
+						<table className="w-full text-sm border-collapse">
+							<thead>
+								<tr className="bg-editorial-ink text-white text-[10px] uppercase tracking-widest">
+									<th className="px-3 py-2 text-left font-black">Team</th>
+									<th className="px-3 py-2 text-left font-black w-20">Cat.</th>
+									<th className="px-3 py-2 text-left font-black w-28">Country</th>
+									<th className="px-3 py-2 text-left font-black w-40">Booth #</th>
+								</tr>
+							</thead>
+							<tbody>
+								{allTeams.map((team, i) => {
+									const err = saveError[team.id];
+									const isSaving = savingId === team.id;
+									const editVal = boothEdits[team.id] ?? "";
+									const currentSaved = team.booth_number != null ? String(team.booth_number) : "";
+									const isDirty = editVal !== currentSaved;
+									return (
+										<tr
+											key={team.id}
+											className={`border-b border-gray-100 ${i % 2 === 0 ? "bg-white" : "bg-gray-50/50"}`}
+										>
+											<td className="px-3 py-2 font-semibold text-editorial-ink">
+												{team.team_name}
+											</td>
+											<td className="px-3 py-2">
+												<span className={`text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 ${team.category === "Junior" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}`}>
+													{team.category}
+												</span>
+											</td>
+											<td className="px-3 py-2 text-xs text-gray-500">{team.country ?? "—"}</td>
+											<td className="px-2 py-1.5">
+												<div className="flex items-center gap-1.5">
+													<input
+														type="number"
+														min={BOOTH_MIN}
+														max={BOOTH_MAX}
+														value={editVal}
+														placeholder={`${BOOTH_MIN}–${BOOTH_MAX}`}
+														onChange={e => {
+															setBoothEdits(prev => ({ ...prev, [team.id]: e.target.value }));
+															setSaveError(prev => ({ ...prev, [team.id]: "" }));
+														}}
+														onKeyDown={e => { if (e.key === "Enter") handleSaveOne(team.id); }}
+														className={`w-24 border-2 px-2 py-1 text-sm font-mono focus:outline-none ${err ? "border-red-400 focus:border-red-500" : isDirty ? "border-editorial-gold focus:border-editorial-gold" : "border-gray-200 focus:border-editorial-ink"}`}
+													/>
+													{isDirty && (
+														<button
+															onClick={() => handleSaveOne(team.id)}
+															disabled={isSaving}
+															className="px-2 py-1 text-[10px] font-black uppercase tracking-widest bg-editorial-ink text-white hover:bg-editorial-gold hover:text-editorial-ink disabled:opacity-50 transition-colors"
+														>
+															{isSaving ? <Loader2 size={11} className="animate-spin" /> : "Save"}
+														</button>
+													)}
+													{!isDirty && team.booth_number && (
+														<span className="text-[10px] text-emerald-600 font-black">✓</span>
+													)}
+												</div>
+												{err && <p className="text-[10px] text-red-500 mt-0.5">{err}</p>}
+											</td>
+										</tr>
+									);
+								})}
+							</tbody>
+						</table>
+					</div>
+				</div>
+			)}
+		</div>
 	);
 }
 

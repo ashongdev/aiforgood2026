@@ -1,4 +1,4 @@
-import { ArrowLeft, Globe, Users } from "lucide-react";
+import { ArrowLeft, Globe, MapPin, Users } from "lucide-react";
 import { useState } from "react";
 import { getCountryFlag } from "../lib/countryFlag";
 import { tc } from "../lib/format";
@@ -46,13 +46,18 @@ function TeamDetail({ team, onBack }: { team: Team; onBack: () => void }) {
 						<h2 className="text-2xl md:text-3xl font-black uppercase tracking-widest text-white leading-tight break-words">
 							{tc(team.team_name)}
 						</h2>
-						<div className="flex items-center gap-2 mt-1">
+						<div className="flex items-center gap-2 mt-1 flex-wrap">
 							<span className="inline-block text-[10px] font-black uppercase tracking-widest px-2 py-0.5 bg-editorial-gold text-editorial-ink">
 								{team.category}
 							</span>
 							{team.country && (
 								<span className="text-[10px] font-bold uppercase tracking-widest text-white/60">
 									{tc(team.country)}
+								</span>
+							)}
+							{team.booth_number && (
+								<span className="text-[10px] font-black font-mono px-1.5 py-0.5 border border-white/30 text-white/80">
+									Booth #{team.booth_number}
 								</span>
 							)}
 						</div>
@@ -68,6 +73,17 @@ function TeamDetail({ team, onBack }: { team: Team; onBack: () => void }) {
 							<div>
 								<p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Country</p>
 								<p className="text-sm font-semibold">{tc(team.country)}</p>
+							</div>
+						</div>
+					)}
+
+					{/* Booth */}
+					{team.booth_number && (
+						<div className="flex items-start gap-3">
+							<MapPin size={15} className="shrink-0 text-gray-400 mt-0.5" />
+							<div>
+								<p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Booth</p>
+								<p className="text-sm font-black font-mono">#{team.booth_number}</p>
 							</div>
 						</div>
 					)}
@@ -189,6 +205,11 @@ export function TeamShowcase({ teams, category }: TeamShowcaseProps) {
 									{team.country && (
 										<p className="text-[10px] text-gray-400 mt-1 group-hover:text-editorial-ink/60 transition-colors">
 											{tc(team.country)}
+										</p>
+									)}
+									{team.booth_number && (
+										<p className="text-[9px] font-black font-mono text-gray-400 mt-0.5 group-hover:text-editorial-ink/60 transition-colors">
+											#{team.booth_number}
 										</p>
 									)}
 								</div>

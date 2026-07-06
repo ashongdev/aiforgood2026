@@ -12,6 +12,8 @@ interface MatchNodeProps {
 		team2Id?: string | null;
 		team1Country?: string | null;
 		team2Country?: string | null;
+		team1BoothNumber?: number | null;
+		team2BoothNumber?: number | null;
 		team1Score: number | null;
 		team2Score: number | null;
 		winner: number | null;
@@ -80,6 +82,11 @@ export function MatchNode({
 						<span className="text-sm font-black text-editorial-ink leading-tight line-clamp-2">
 							{match.team1}
 						</span>
+						{match.team1BoothNumber && (
+							<span className="text-[9px] font-black font-mono text-gray-400">
+								#{match.team1BoothNumber}
+							</span>
+						)}
 						{showRankings && team1Rank && (
 							<span className="text-[10px] font-black px-1.5 py-0.5 bg-editorial-gold text-white">
 								#{team1Rank}
@@ -113,6 +120,11 @@ export function MatchNode({
 						<span className="text-sm font-black text-editorial-ink leading-tight line-clamp-2">
 							{match.team2}
 						</span>
+						{match.team2BoothNumber && (
+							<span className="text-[9px] font-black font-mono text-gray-400">
+								#{match.team2BoothNumber}
+							</span>
+						)}
 						{showRankings && team2Rank && (
 							<span className="text-[10px] font-black px-1.5 py-0.5 bg-editorial-gold text-white">
 								#{team2Rank}

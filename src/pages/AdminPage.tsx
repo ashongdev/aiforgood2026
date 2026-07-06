@@ -375,7 +375,7 @@ export function AdminPage() {
 			supabase
 				.from("matches")
 				.select(
-					"*, team_1:team_1_id(id,team_name,category), team_2:team_2_id(id,team_name,category), winner:winner_id(id,team_name,category)",
+					"*, team_1:team_1_id(id,team_name,category,booth_number), team_2:team_2_id(id,team_name,category,booth_number), winner:winner_id(id,team_name,category)",
 				)
 				.eq("phase", "Qualifiers")
 				.eq("category", category)
@@ -383,7 +383,7 @@ export function AdminPage() {
 			supabase
 				.from("matches")
 				.select(
-					"*, team_1:team_1_id(id,team_name,category), team_2:team_2_id(id,team_name,category), winner:winner_id(id,team_name,category)",
+					"*, team_1:team_1_id(id,team_name,category,booth_number), team_2:team_2_id(id,team_name,category,booth_number), winner:winner_id(id,team_name,category)",
 				)
 				.in("phase", ELIM_PHASES)
 				.eq("category", category)
@@ -1223,21 +1223,19 @@ export function AdminPage() {
 												<span className="text-[10px] font-black text-gray-300 w-5 shrink-0">
 													{i + 1}
 												</span>
-												<span className="flex-1 font-semibold truncate">
-													{m.team_1?.team_name ?? (
-														<em className="text-gray-400">
-															TBD
-														</em>
+												<span className="flex-1 min-w-0">
+													<span className="font-semibold truncate block">{m.team_1?.team_name ?? <em className="text-gray-400">TBD</em>}</span>
+													{(m.team_1 as { booth_number?: number | null } | null)?.booth_number && (
+														<span className="text-[9px] font-mono text-gray-400">#{(m.team_1 as { booth_number?: number | null }).booth_number}</span>
 													)}
 												</span>
 												<span className="text-xs text-gray-300 shrink-0">
 													vs
 												</span>
-												<span className="flex-1 font-semibold truncate text-right">
-													{m.team_2?.team_name ?? (
-														<em className="text-gray-400">
-															TBD
-														</em>
+												<span className="flex-1 min-w-0 text-right">
+													<span className="font-semibold truncate block">{m.team_2?.team_name ?? <em className="text-gray-400">TBD</em>}</span>
+													{(m.team_2 as { booth_number?: number | null } | null)?.booth_number && (
+														<span className="text-[9px] font-mono text-gray-400">#{(m.team_2 as { booth_number?: number | null }).booth_number}</span>
 													)}
 												</span>
 												<span className="text-xs text-gray-400 font-mono w-12 text-center shrink-0">

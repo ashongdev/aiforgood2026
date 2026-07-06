@@ -6,6 +6,8 @@ export interface Match {
 	team2Id?: string | null;
 	team1Country?: string | null;
 	team2Country?: string | null;
+	team1BoothNumber?: number | null;
+	team2BoothNumber?: number | null;
 	team1Score: number | null;
 	team2Score: number | null;
 	team1R1: number | null;

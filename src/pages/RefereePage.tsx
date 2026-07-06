@@ -731,15 +731,22 @@ function MatchCard({
 				className={`px-4 pt-4 pb-3 ${t1Ahead ? "bg-emerald-50/40" : ""}`}
 			>
 				<div className="flex items-center justify-between mb-2">
-					<span
-						className={`text-lg font-black leading-tight ${t1Ahead ? "text-emerald-700" : "text-editorial-ink"}`}
-					>
-						{tc(match.team_1?.team_name) || (
-							<span className="font-normal italic text-gray-300 text-base">
-								Empty slot
+					<div>
+						<span
+							className={`text-lg font-black leading-tight ${t1Ahead ? "text-emerald-700" : "text-editorial-ink"}`}
+						>
+							{tc(match.team_1?.team_name) || (
+								<span className="font-normal italic text-gray-300 text-base">
+									Empty slot
+								</span>
+							)}
+						</span>
+						{(match.team_1 as { booth_number?: number | null } | null)?.booth_number && (
+							<span className="block text-[10px] font-mono text-gray-400">
+								Booth #{(match.team_1 as { booth_number?: number | null }).booth_number}
 							</span>
 						)}
-					</span>
+					</div>
 					<span
 						className={`text-2xl font-black font-mono ${t1Total !== null ? "text-emerald-600" : "text-gray-200"}`}
 					>
@@ -816,15 +823,22 @@ function MatchCard({
 					))}
 				</div>
 				<div className="flex items-center justify-between">
-					<span
-						className={`text-lg font-black leading-tight ${t2Ahead ? "text-emerald-700" : "text-editorial-ink"}`}
-					>
-						{tc(match.team_2?.team_name) || (
-							<span className="font-normal italic text-gray-300 text-base">
-								Empty slot
+					<div>
+						<span
+							className={`text-lg font-black leading-tight ${t2Ahead ? "text-emerald-700" : "text-editorial-ink"}`}
+						>
+							{tc(match.team_2?.team_name) || (
+								<span className="font-normal italic text-gray-300 text-base">
+									Empty slot
+								</span>
+							)}
+						</span>
+						{(match.team_2 as { booth_number?: number | null } | null)?.booth_number && (
+							<span className="block text-[10px] font-mono text-gray-400">
+								Booth #{(match.team_2 as { booth_number?: number | null }).booth_number}
 							</span>
 						)}
-					</span>
+					</div>
 					<span
 						className={`text-2xl font-black font-mono ${t2Total !== null ? "text-emerald-600" : "text-gray-200"}`}
 					>
@@ -1019,7 +1033,7 @@ export function RefereePage() {
 		const { data, error } = await supabase
 			.from("matches")
 			.select(
-				"*, team_1:team_1_id(id,team_name,category), team_2:team_2_id(id,team_name,category), winner:winner_id(id,team_name,category)",
+				"*, team_1:team_1_id(id,team_name,category,booth_number), team_2:team_2_id(id,team_name,category,booth_number), winner:winner_id(id,team_name,category)",
 			)
 			.eq("phase", phase)
 			.eq("category", category)

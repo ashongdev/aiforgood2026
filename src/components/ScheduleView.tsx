@@ -34,7 +34,7 @@ export function ScheduleView({ category }: { category: Category }) {
 		setIsLoading(true);
 		supabase
 			.from("matches")
-			.select("*, team_1:team_1_id(id,team_name,category), team_2:team_2_id(id,team_name,category), winner:winner_id(id,team_name,category)")
+			.select("*, team_1:team_1_id(id,team_name,category,booth_number), team_2:team_2_id(id,team_name,category,booth_number), winner:winner_id(id,team_name,category)")
 			.eq("category", category)
 			.not("scheduled_time", "is", null)
 			.order("scheduled_time", { ascending: true })
@@ -150,13 +150,27 @@ export function ScheduleView({ category }: { category: Category }) {
 
 								{/* Teams */}
 								<div className="flex-1 min-w-0 flex items-center gap-2">
-									<span className={`flex-1 truncate font-semibold ${highlight1 ? "text-editorial-gold" : "text-editorial-ink"}`}>
-										{tc(m.team_1?.team_name) || "TBD"}
-									</span>
+									<div className="flex-1 min-w-0">
+										<span className={`block truncate font-semibold ${highlight1 ? "text-editorial-gold" : "text-editorial-ink"}`}>
+											{tc(m.team_1?.team_name) || "TBD"}
+										</span>
+										{(m.team_1 as { booth_number?: number | null } | null)?.booth_number && (
+											<span className="text-[9px] font-mono text-gray-400">
+												#{(m.team_1 as { booth_number?: number | null }).booth_number}
+											</span>
+										)}
+									</div>
 									<span className="text-xs text-gray-300 shrink-0">vs</span>
-									<span className={`flex-1 truncate font-semibold text-right ${highlight2 ? "text-editorial-gold" : "text-editorial-ink"}`}>
-										{tc(m.team_2?.team_name) || "TBD"}
-									</span>
+									<div className="flex-1 min-w-0 text-right">
+										<span className={`block truncate font-semibold ${highlight2 ? "text-editorial-gold" : "text-editorial-ink"}`}>
+											{tc(m.team_2?.team_name) || "TBD"}
+										</span>
+										{(m.team_2 as { booth_number?: number | null } | null)?.booth_number && (
+											<span className="text-[9px] font-mono text-gray-400">
+												#{(m.team_2 as { booth_number?: number | null }).booth_number}
+											</span>
+										)}
+									</div>
 								</div>
 
 								{/* Status chip */}

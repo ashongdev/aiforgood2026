@@ -131,6 +131,8 @@ function toMatch(m: MatchWithTeams): LegacyMatch {
 		team2Id: m.team_2_id,
 		team1Country: (m.team_1 as { country?: string | null } | null)?.country ?? null,
 		team2Country: (m.team_2 as { country?: string | null } | null)?.country ?? null,
+		team1BoothNumber: (m.team_1 as { booth_number?: number | null } | null)?.booth_number ?? null,
+		team2BoothNumber: (m.team_2 as { booth_number?: number | null } | null)?.booth_number ?? null,
 		team1Score: sumRounds(m.team_1_r1, m.team_1_r2, m.team_1_r3, m.team_1_r4) ?? m.team_1_final_points,
 		team2Score: sumRounds(m.team_2_r1, m.team_2_r2, m.team_2_r3, m.team_2_r4) ?? m.team_2_final_points,
 		team1R1: m.team_1_r1,

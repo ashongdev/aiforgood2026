@@ -292,8 +292,8 @@ export function ScorekeeperPage() {
 			.select(
 				`
 				*,
-				team_1:team_1_id ( id, team_name, category ),
-				team_2:team_2_id ( id, team_name, category ),
+				team_1:team_1_id ( id, team_name, category, booth_number ),
+				team_2:team_2_id ( id, team_name, category, booth_number ),
 				winner:winner_id ( id, team_name, category )
 			`,
 			)
@@ -857,6 +857,11 @@ function QualifiersGrid({
 										</span>
 									)}
 								</span>
+								{(match.team_1 as { booth_number?: number | null } | null)?.booth_number && (
+									<span className="text-[9px] font-mono text-gray-400">
+										#{(match.team_1 as { booth_number?: number | null }).booth_number}
+									</span>
+								)}
 							</td>
 
 							{/* Team 1 rounds */}
@@ -915,6 +920,11 @@ function QualifiersGrid({
 										</span>
 									)}
 								</span>
+								{(match.team_2 as { booth_number?: number | null } | null)?.booth_number && (
+									<span className="text-[9px] font-mono text-gray-400">
+										#{(match.team_2 as { booth_number?: number | null }).booth_number}
+									</span>
+								)}
 							</td>
 
 							{/* Team 2 rounds */}

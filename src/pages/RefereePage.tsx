@@ -375,15 +375,23 @@ function ScoringPanel({
 								</div>
 								<div className="divide-y divide-gray-50">
 									{items.map((item) => (
-										<ScoringRow
-											key={item.key}
-											item={item}
-											count={breakdown[item.key]}
-											category={category}
-											onChange={(delta) =>
-												adjust(item.key, delta)
-											}
-										/>
+										<div key={item.key}>
+											<ScoringRow
+												item={item}
+												count={breakdown[item.key]}
+												category={category}
+												onChange={(delta) =>
+													adjust(item.key, delta)
+												}
+											/>
+											{item.key === "m1_seeds_correct" && (
+												<div className="ml-7 mb-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-gray-400">
+													<span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-gray-400 shrink-0" />Small → grey plot</span>
+													<span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-green-500 shrink-0" />Medium → green plot</span>
+													<span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-orange-400 shrink-0" />Large → orange plot</span>
+												</div>
+											)}
+										</div>
 									))}
 								</div>
 							</div>

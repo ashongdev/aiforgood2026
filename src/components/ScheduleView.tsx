@@ -93,10 +93,7 @@ export function ScheduleView({ category }: { category: Category }) {
 						{tc(nextUpMatch.team_2?.team_name) || "TBD"}
 					</span>
 					<span className="text-xs text-gray-500 ml-auto shrink-0">
-						{new Date(nextUpMatch.scheduled_time!).toLocaleString([], {
-							weekday: "short",
-							month: "short",
-							day: "numeric",
+						{new Date(nextUpMatch.scheduled_time!).toLocaleTimeString([], {
 							hour: "2-digit",
 							minute: "2-digit",
 						})}
@@ -128,51 +125,56 @@ export function ScheduleView({ category }: { category: Category }) {
 						const q = search.trim().toLowerCase();
 						const highlight1 = q && m.team_1?.team_name?.toLowerCase().includes(q);
 						const highlight2 = q && m.team_2?.team_name?.toLowerCase().includes(q);
+						const booth1 = (m.team_1 as { booth_number?: number | null } | null)?.booth_number;
+						const booth2 = (m.team_2 as { booth_number?: number | null } | null)?.booth_number;
 						return (
-							<div key={m.id} className="px-4 py-3 flex items-center gap-3 flex-wrap text-sm">
-								{/* Time + phase */}
-								<div className="shrink-0 w-28">
-									<p className="text-xs font-semibold text-editorial-ink">
+							<div key={m.id} className="px-3 py-2.5 grid grid-cols-[3rem_1fr_auto] items-center gap-2">
+								{/* Time + table */}
+								<div className="shrink-0">
+									<p className="text-xs font-semibold text-editorial-ink leading-tight">
 										{new Date(m.scheduled_time!).toLocaleTimeString([], {
 											hour: "2-digit",
 											minute: "2-digit",
 										})}
 									</p>
-									<p className="text-[10px] text-gray-400">
+									<p className="text-[10px] text-gray-400 leading-tight">
 										T{m.table_number ?? "—"}
 									</p>
-									<p className="text-[10px] text-gray-400 truncate">{m.phase}</p>
 								</div>
 
 								{/* Teams */}
-								<div className="flex-1 min-w-0 flex items-center gap-2">
-									<div className="flex-1 min-w-0">
-										<span className={`block truncate font-semibold ${highlight1 ? "text-editorial-gold" : "text-editorial-ink"}`}>
+								<div className="min-w-0 flex items-center gap-1.5">
+									<div className="min-w-0 flex-1">
+										<span className={`block truncate text-xs font-semibold ${highlight1 ? "text-editorial-gold" : "text-editorial-ink"}`}>
 											{tc(m.team_1?.team_name) || "TBD"}
 										</span>
-										{(m.team_1 as { booth_number?: number | null } | null)?.booth_number && (
-											<span className="text-[9px] font-mono text-gray-400">
-												#{(m.team_1 as { booth_number?: number | null }).booth_number}
+										{booth1 && (
+											<span className="text-[9px] font-mono text-gray-400 hidden sm:block">
+												#{booth1}
 											</span>
 										)}
 									</div>
-									<span className="text-xs text-gray-300 shrink-0">vs</span>
-									<div className="flex-1 min-w-0 text-right">
-										<span className={`block truncate font-semibold ${highlight2 ? "text-editorial-gold" : "text-editorial-ink"}`}>
+									<span className="text-[10px] text-gray-300 shrink-0">vs</span>
+									<div className="min-w-0 flex-1 text-right">
+										<span className={`block truncate text-xs font-semibold ${highlight2 ? "text-editorial-gold" : "text-editorial-ink"}`}>
 											{tc(m.team_2?.team_name) || "TBD"}
 										</span>
-										{(m.team_2 as { booth_number?: number | null } | null)?.booth_number && (
-											<span className="text-[9px] font-mono text-gray-400">
-												#{(m.team_2 as { booth_number?: number | null }).booth_number}
+										{booth2 && (
+											<span className="text-[9px] font-mono text-gray-400 hidden sm:block">
+												#{booth2}
 											</span>
 										)}
 									</div>
 								</div>
 
-								{/* Status chip */}
-								<span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 shrink-0 ${STATUS_STYLES[status]}`}>
-									{status === "done" ? `✓ ${tc(m.winner?.team_name) || "Done"}` : status === "live" ? "Live" : "Upcoming"}
-								</span>
+								{/* Status — compact; hide "Upcoming" to save space */}
+								{status !== "upcoming" ? (
+									<span className={`text-[10px] font-black uppercase tracking-widest px-1.5 py-0.5 shrink-0 ${STATUS_STYLES[status]}`}>
+										{status === "live" ? "Live" : "✓"}
+									</span>
+								) : (
+									<span />
+								)}
 							</div>
 						);
 					})

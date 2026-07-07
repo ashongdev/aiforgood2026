@@ -574,7 +574,14 @@ export function AdminPage() {
 	}
 
 	async function handleSaveScheduledTime(matchId: string, value: string) {
-		const scheduled_time = value ? new Date(value).toISOString() : null;
+		let scheduled_time: string | null = null;
+		if (value) {
+			const existing = [...qualifierMatches, ...elimMatches].find(m => m.id === matchId)?.scheduled_time;
+			const base = existing ? new Date(existing) : new Date();
+			const [h, min] = value.split(":").map(Number);
+			base.setHours(h, min, 0, 0);
+			scheduled_time = base.toISOString();
+		}
 		await supabase.from("matches").update({ scheduled_time }).eq("id", matchId);
 		setEditingScheduleId(null);
 		setQualifierMatches((prev) =>
@@ -1253,11 +1260,11 @@ export function AdminPage() {
 												<span className="text-xs text-gray-400 font-mono w-12 text-center shrink-0">
 													{m.table_number ?? "—"}
 												</span>
-												<div className="hidden sm:block w-36 shrink-0">
+												<div className="hidden sm:block w-28 shrink-0">
 													{editingScheduleId === m.id ? (
 														<input
-															type="datetime-local"
-															defaultValue={m.scheduled_time ? new Date(m.scheduled_time).toISOString().slice(0, 16) : ""}
+															type="time"
+															defaultValue={m.scheduled_time ? (() => { const d = new Date(m.scheduled_time); return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; })() : ""}
 															onBlur={(e) => handleSaveScheduledTime(m.id, e.target.value)}
 															onKeyDown={(e) => {
 																if (e.key === "Enter") handleSaveScheduledTime(m.id, (e.target as HTMLInputElement).value);
@@ -1273,17 +1280,22 @@ export function AdminPage() {
 															title="Click to set scheduled time"
 														>
 															{m.scheduled_time
-																? new Date(m.scheduled_time).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+																? new Date(m.scheduled_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
 																: <span className="text-gray-200">Set time…</span>}
 														</button>
 													)}
 												</div>
 												<button
 													onClick={() => handleToggleApproval(m.id, m.scores_approved)}
-													className={`p-1 transition-colors shrink-0 ${m.scores_approved ? "text-emerald-500 hover:text-emerald-700" : "text-gray-200 hover:text-emerald-400"}`}
+													className={`flex items-center gap-1 px-2 py-1 text-[10px] font-black uppercase tracking-widest border transition-colors shrink-0 ${
+														m.scores_approved
+															? "bg-emerald-500 border-emerald-500 text-white hover:bg-emerald-600 hover:border-emerald-600"
+															: "border-gray-300 text-gray-400 hover:border-emerald-400 hover:text-emerald-500"
+													}}`}
 													title={m.scores_approved ? "Scores approved — click to revoke" : "Approve scores"}
 												>
-													<CheckCircle size={14} />
+													<CheckCircle size={11} />
+													{m.scores_approved ? "Approved" : "Approve"}
 												</button>
 												<button
 													onClick={() =>
@@ -3122,7 +3134,13 @@ function MatchCard({
 	const [localSchedule, setLocalSchedule] = useState<string | null>(match.scheduled_time);
 
 	async function saveTime(value: string) {
-		const t = value ? new Date(value).toISOString() : null;
+		let t: string | null = null;
+		if (value) {
+			const base = localSchedule ? new Date(localSchedule) : new Date();
+			const [h, m] = value.split(":").map(Number);
+			base.setHours(h, m, 0, 0);
+			t = base.toISOString();
+		}
 		setLocalSchedule(t);
 		setEditingTime(false);
 		await supabase.from("matches").update({ scheduled_time: t }).eq("id", match.id);
@@ -3175,15 +3193,15 @@ function MatchCard({
 				<div className="shrink-0 flex items-center gap-2">
 					{editingTime ? (
 						<input
-							type="datetime-local"
-							defaultValue={localSchedule ? new Date(localSchedule).toISOString().slice(0, 16) : ""}
+							type="time"
+							defaultValue={localSchedule ? (() => { const d = new Date(localSchedule); return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; })() : ""}
 							onBlur={(e) => saveTime(e.target.value)}
 							onKeyDown={(e) => {
 								if (e.key === "Enter") saveTime((e.target as HTMLInputElement).value);
 								if (e.key === "Escape") setEditingTime(false);
 							}}
 							autoFocus
-							className="border border-editorial-gold px-1.5 py-0.5 text-xs focus:outline-none w-40"
+							className="border border-editorial-gold px-1.5 py-0.5 text-xs focus:outline-none w-24"
 						/>
 					) : (
 						<button
@@ -3192,7 +3210,7 @@ function MatchCard({
 							title="Set scheduled time"
 						>
 							{localSchedule
-								? new Date(localSchedule).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+								? new Date(localSchedule).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
 								: "＋ time"}
 						</button>
 					)}

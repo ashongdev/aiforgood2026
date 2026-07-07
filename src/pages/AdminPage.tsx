@@ -2394,9 +2394,6 @@ function TeamsTab({
 
 // ─── BoothAssignmentPanel ──────────────────────────────────────────────────────
 
-const BOOTH_MIN = 600;
-const BOOTH_MAX = 667;
-
 function BoothAssignmentPanel() {
 	const [allTeams, setAllTeams] = useState<Team[]>([]);
 	const [boothEdits, setBoothEdits] = useState<Record<string, string>>({});
@@ -2427,8 +2424,8 @@ function BoothAssignmentPanel() {
 	async function handleSaveOne(teamId: string) {
 		const raw = boothEdits[teamId]?.trim();
 		const num = raw ? parseInt(raw, 10) : null;
-		if (num !== null && (isNaN(num) || num < BOOTH_MIN || num > BOOTH_MAX)) {
-			setSaveError(e => ({ ...e, [teamId]: `Must be ${BOOTH_MIN}–${BOOTH_MAX}` }));
+		if (num !== null && isNaN(num)) {
+			setSaveError(e => ({ ...e, [teamId]: "Must be a number" }));
 			return;
 		}
 		setSaveError(e => ({ ...e, [teamId]: "" }));
@@ -2447,44 +2444,38 @@ function BoothAssignmentPanel() {
 
 	async function handleAutoAssign() {
 		setAutoError(null);
-		const unassigned = allTeams.filter(t => {
-			const v = boothEdits[t.id]?.trim();
-			return !v;
-		});
+		const unassigned = allTeams.filter(t => !boothEdits[t.id]?.trim());
 		if (unassigned.length === 0) {
 			setAutoError("All teams already have booth numbers.");
 			return;
 		}
 
-		const taken = new Set(
-			allTeams
-				.map(t => {
-					const v = boothEdits[t.id]?.trim();
-					return v ? parseInt(v, 10) : null;
-				})
-				.filter((n): n is number => n !== null && !isNaN(n)),
-		);
+		// Find the highest booth number currently assigned and start from there + 1.
+		const allAssigned = allTeams
+			.map(t => { const v = boothEdits[t.id]?.trim(); return v ? parseInt(v, 10) : NaN; })
+			.filter(n => !isNaN(n));
+		const startFrom = allAssigned.length > 0 ? Math.max(...allAssigned) + 1 : 600;
 
-		const available: number[] = [];
-		for (let i = BOOTH_MIN; i <= BOOTH_MAX; i++) {
-			if (!taken.has(i)) available.push(i);
+		// Group by country so same-country teams get consecutive numbers.
+		const countryGroups = new Map<string, Team[]>();
+		for (const t of unassigned) {
+			const key = t.country ?? "__none__";
+			if (!countryGroups.has(key)) countryGroups.set(key, []);
+			countryGroups.get(key)!.push(t);
 		}
 
-		// Fisher-Yates shuffle
-		for (let i = available.length - 1; i > 0; i--) {
+		// Shuffle the groups so countries land in random order, then flatten.
+		const groups = Array.from(countryGroups.values());
+		for (let i = groups.length - 1; i > 0; i--) {
 			const j = Math.floor(Math.random() * (i + 1));
-			[available[i], available[j]] = [available[j], available[i]];
+			[groups[i], groups[j]] = [groups[j], groups[i]];
 		}
-
-		if (available.length < unassigned.length) {
-			setAutoError(`Only ${available.length} numbers left in ${BOOTH_MIN}–${BOOTH_MAX} but ${unassigned.length} teams need assignment.`);
-			return;
-		}
+		const orderedTeams = groups.flat();
 
 		setIsAutoAssigning(true);
 		await Promise.all(
-			unassigned.map((t, idx) =>
-				supabase.from("teams").update({ booth_number: available[idx] }).eq("id", t.id),
+			orderedTeams.map((t, idx) =>
+				supabase.from("teams").update({ booth_number: startFrom + idx }).eq("id", t.id),
 			),
 		);
 		setIsAutoAssigning(false);
@@ -2492,6 +2483,7 @@ function BoothAssignmentPanel() {
 	}
 
 	const assignedCount = allTeams.filter(t => t.booth_number != null).length;
+	const maxBooth = allTeams.reduce((m, t) => t.booth_number != null && t.booth_number > m ? t.booth_number : m, 0);
 
 	return (
 		<div className="border-2 border-editorial-ink bg-white">
@@ -2504,7 +2496,7 @@ function BoothAssignmentPanel() {
 					Booth Assignments
 				</span>
 				<span className="text-[10px] text-gray-400 font-mono mr-2">
-					{assignedCount}/{allTeams.length} assigned · range {BOOTH_MIN}–{BOOTH_MAX}
+					{assignedCount}/{allTeams.length} assigned{maxBooth > 0 ? ` · highest: #${maxBooth}` : ""}
 				</span>
 				{open ? <ChevronUp size={14} className="shrink-0 text-gray-400" /> : <ChevronDown size={14} className="shrink-0 text-gray-400" />}
 			</button>
@@ -2514,7 +2506,7 @@ function BoothAssignmentPanel() {
 					{/* Auto-assign button */}
 					<div className="flex items-center justify-between gap-3 flex-wrap">
 						<p className="text-[11px] text-gray-500">
-							Manually enter booth numbers or auto-assign remaining teams randomly within {BOOTH_MIN}–{BOOTH_MAX}.
+							Enter any booth number manually, or auto-assign remaining teams starting from the next number after the current highest.
 						</p>
 						<button
 							onClick={handleAutoAssign}
@@ -2565,10 +2557,8 @@ function BoothAssignmentPanel() {
 												<div className="flex items-center gap-1.5">
 													<input
 														type="number"
-														min={BOOTH_MIN}
-														max={BOOTH_MAX}
 														value={editVal}
-														placeholder={`${BOOTH_MIN}–${BOOTH_MAX}`}
+														placeholder="e.g. 618"
 														onChange={e => {
 															setBoothEdits(prev => ({ ...prev, [team.id]: e.target.value }));
 															setSaveError(prev => ({ ...prev, [team.id]: "" }));

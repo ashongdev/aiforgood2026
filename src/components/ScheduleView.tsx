@@ -139,11 +139,7 @@ export function ScheduleView({ category }: { category: Category }) {
 										})}
 									</p>
 									<p className="text-[10px] text-gray-400">
-										{new Date(m.scheduled_time!).toLocaleDateString([], {
-											month: "short",
-											day: "numeric",
-										})}{" "}
-										· T{m.table_number ?? "—"}
+										T{m.table_number ?? "—"}
 									</p>
 									<p className="text-[10px] text-gray-400 truncate">{m.phase}</p>
 								</div>

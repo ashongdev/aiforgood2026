@@ -1,5 +1,6 @@
 import {
 	AlertCircle,
+	CheckCircle,
 	ChevronDown,
 	ChevronRight,
 	ChevronUp,
@@ -581,6 +582,17 @@ export function AdminPage() {
 		);
 		setElimMatches((prev) =>
 			prev.map((m) => (m.id === matchId ? { ...m, scheduled_time } : m)),
+		);
+	}
+
+	async function handleToggleApproval(matchId: string, currentVal: boolean) {
+		const scores_approved = !currentVal;
+		await supabase.from("matches").update({ scores_approved }).eq("id", matchId);
+		setQualifierMatches((prev) =>
+			prev.map((m) => (m.id === matchId ? { ...m, scores_approved } : m)),
+		);
+		setElimMatches((prev) =>
+			prev.map((m) => (m.id === matchId ? { ...m, scores_approved } : m)),
 		);
 	}
 
@@ -1266,6 +1278,13 @@ export function AdminPage() {
 														</button>
 													)}
 												</div>
+												<button
+													onClick={() => handleToggleApproval(m.id, m.scores_approved)}
+													className={`p-1 transition-colors shrink-0 ${m.scores_approved ? "text-emerald-500 hover:text-emerald-700" : "text-gray-200 hover:text-emerald-400"}`}
+													title={m.scores_approved ? "Scores approved — click to revoke" : "Approve scores"}
+												>
+													<CheckCircle size={14} />
+												</button>
 												<button
 													onClick={() =>
 														handleDeleteMatch(m.id)

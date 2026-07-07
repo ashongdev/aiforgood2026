@@ -88,6 +88,7 @@ export interface Match {
   scheduled_time: string | null
   // Per-round mission breakdown (keys: "t1r1"…"t2r4", values: RoundBreakdown)
   score_breakdown: Record<string, Record<string, number>> | null
+  scores_approved: boolean
 }
 
 // Match row joined with team names (used in scorekeeper grid)

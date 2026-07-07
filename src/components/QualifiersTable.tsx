@@ -255,7 +255,7 @@ export function QualifiersTable({
 											))}
 										</span>
 										<span
-											className={`shrink-0 w-12 text-right text-sm font-black ${isExpanded ? "text-editorial-gold" : standing.total > 0 ? "text-editorial-green" : "text-gray-400"}`}
+											className={`shrink-0 w-12 text-right text-sm font-black ${isExpanded ? "text-editorial-gold" : standing.total > 0 ? "text-editorial-green" : standing.total < 0 ? "text-red-500" : "text-gray-400"}`}
 										>
 											<AnimatedScore
 												value={String(standing.total)}

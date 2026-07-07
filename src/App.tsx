@@ -58,7 +58,7 @@ function computeSpectatorStandings(matches: MatchWithTeams[], rankByTotal = fals
 		opponent: { team_name: string } | null,
 	) {
 		if (!id || !team) return;
-		const scored = [r1, r2, r3, r4].filter((v): v is number => v !== null && v > 0);
+		const scored = [r1, r2, r3, r4].filter((v): v is number => v !== null);
 		const e = map.get(id) ?? { team_name: tc(team.team_name), country: tc(team.country), booth_number: team.booth_number ?? null, category, r1: null, r2: null, r3: null, r4: null, opp_r1: null, opp_r2: null, opp_r3: null, opp_r4: null, best_round: 0, total: 0, absences: 0 };
 		// opp_r1 is the system-generated R1 pairing from the DB
 		if (e.r1 === null && r1 !== null) { e.r1 = r1; e.opp_r1 = opponent ? tc(opponent.team_name) : null; }

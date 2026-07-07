@@ -40,6 +40,7 @@ import type {
 	ScorekeeperProfile,
 	Team,
 } from "../lib/database.types";
+import { getPairingsForRound } from "../lib/qualPairings";
 import { supabase } from "../lib/supabase";
 
 // ─── Bulk-add types & helpers ─────────────────────────────────────────────────
@@ -351,6 +352,7 @@ export function AdminPage() {
 	const [addMatchOpen, setAddMatchOpen] = useState(false);
 	const [matchListOpen, setMatchListOpen] = useState(false);
 	const [standingsOpen, setStandingsOpen] = useState(false);
+	const [adminQualTab, setAdminQualTab] = useState<"r1" | "r2" | "r3" | "r4">("r1");
 	const [advancePanelOpen, setAdvancePanelOpen] = useState(true);
 	const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
 
@@ -602,6 +604,27 @@ export function AdminPage() {
 			prev.map((m) => (m.id === matchId ? { ...m, scores_approved } : m)),
 		);
 	}
+
+	async function handleSaveRoundTime(matchId: string, round: 2 | 3 | 4, value: string) {
+		const col = `scheduled_time_r${round}` as "scheduled_time_r2" | "scheduled_time_r3" | "scheduled_time_r4";
+		let t: string | null = null;
+		if (value) {
+			const existing = [...qualifierMatches, ...elimMatches].find(m => m.id === matchId)?.[col];
+			const base = existing ? new Date(existing) : new Date();
+			const [h, min] = value.split(":").map(Number);
+			base.setHours(h, min, 0, 0);
+			t = base.toISOString();
+		}
+		await supabase.from("matches").update({ [col]: t }).eq("id", matchId);
+		setQualifierMatches(prev => prev.map(m => m.id === matchId ? { ...m, [col]: t } : m));
+	}
+
+	// ── Qualifier round pairings (R2/R3/R4 computed from standings) ─────────────
+	const qualRoundPairings = useMemo(() => ({
+		r2: new Map(getPairingsForRound(qualifierMatches, 2).map((p) => [p.match.id, p])),
+		r3: new Map(getPairingsForRound(qualifierMatches, 3).map((p) => [p.match.id, p])),
+		r4: new Map(getPairingsForRound(qualifierMatches, 4).map((p) => [p.match.id, p])),
+	}), [qualifierMatches]);
 
 	// ── Bracket advancement ─────────────────────────────────────────────────────
 
@@ -1213,106 +1236,102 @@ export function AdminPage() {
 							>
 								{qualifierMatches.length === 0 ? (
 									<div className="p-6 text-center text-sm text-gray-400">
-										No matches yet. Add one above or use
-										auto-generate.
+										No matches yet. Add one above or use auto-generate.
 									</div>
 								) : (
 									<div>
-										<div className="bg-editorial-ink/5 px-3 py-1.5 flex items-center border-b border-gray-100">
-											<span className="text-[10px] font-black uppercase tracking-widest text-gray-400 flex-1">
-												Teams
-											</span>
-											<span className="text-[10px] font-black uppercase tracking-widest text-gray-400 w-12 text-center">
-												Table
-											</span>
-											<span className="text-[10px] font-black uppercase tracking-widest text-gray-400 w-36 text-center hidden sm:block">
-												Scheduled
-											</span>
-											<span className="w-8" />
+										{/* Round tabs */}
+										<div className="flex border-b border-gray-200">
+											{(["r1", "r2", "r3", "r4"] as const).map((r) => (
+												<button
+													key={r}
+													onClick={() => setAdminQualTab(r)}
+													className={`px-4 py-2 text-xs font-black uppercase tracking-widest border-b-2 transition-colors ${
+														adminQualTab === r
+															? "border-editorial-gold text-editorial-gold"
+															: "border-transparent text-gray-400 hover:text-editorial-ink"
+													}`}
+												>
+													{r.toUpperCase()}
+												</button>
+											))}
 										</div>
-										{qualifierMatches.map((m, i) => (
-											<div
-												key={m.id}
-												className={`flex items-center gap-3 px-3 py-2.5 border-b border-gray-100 text-sm last:border-b-0 ${
-													i % 2 === 0
-														? "bg-white"
-														: "bg-editorial-bg/30"
-												}`}
-											>
-												<span className="text-[10px] font-black text-gray-300 w-5 shrink-0">
-													{i + 1}
-												</span>
-												<span className="flex-1 min-w-0">
-													<span className="font-semibold truncate block">{m.team_1?.team_name ?? <em className="text-gray-400">TBD</em>}</span>
-													{(m.team_1 as { booth_number?: number | null } | null)?.booth_number && (
-														<span className="text-[9px] font-mono text-gray-400">#{(m.team_1 as { booth_number?: number | null }).booth_number}</span>
-													)}
-												</span>
-												<span className="text-xs text-gray-300 shrink-0">
-													vs
-												</span>
-												<span className="flex-1 min-w-0 text-right">
-													<span className="font-semibold truncate block">{m.team_2?.team_name ?? <em className="text-gray-400">TBD</em>}</span>
-													{(m.team_2 as { booth_number?: number | null } | null)?.booth_number && (
-														<span className="text-[9px] font-mono text-gray-400">#{(m.team_2 as { booth_number?: number | null }).booth_number}</span>
-													)}
-												</span>
-												<span className="text-xs text-gray-400 font-mono w-12 text-center shrink-0">
-													{m.table_number ?? "—"}
-												</span>
-												<div className="hidden sm:block w-28 shrink-0">
-													{editingScheduleId === m.id ? (
-														<input
-															type="time"
-															defaultValue={m.scheduled_time ? (() => { const d = new Date(m.scheduled_time); return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; })() : ""}
-															onBlur={(e) => handleSaveScheduledTime(m.id, e.target.value)}
-															onKeyDown={(e) => {
-																if (e.key === "Enter") handleSaveScheduledTime(m.id, (e.target as HTMLInputElement).value);
-																if (e.key === "Escape") setEditingScheduleId(null);
-															}}
-															autoFocus
-															className="w-full border border-editorial-gold px-1.5 py-0.5 text-xs focus:outline-none"
-														/>
-													) : (
+
+										{/* R1: actual DB pairings + approve/delete */}
+										{adminQualTab === "r1" && (
+											<div className="divide-y divide-gray-100">
+												{qualifierMatches.map((m, i) => (
+													<div key={m.id} className={`flex items-center gap-2 px-3 py-2.5 text-sm ${i % 2 === 0 ? "bg-white" : "bg-editorial-bg/30"}`}>
+														<span className="text-[10px] font-black text-gray-300 w-5 shrink-0">{i + 1}</span>
+														<span className="flex-1 min-w-0 truncate font-semibold text-editorial-ink">{m.team_1?.team_name ?? <em className="text-gray-400">TBD</em>}</span>
+														<span className="text-xs text-gray-300 shrink-0">vs</span>
+														<span className="flex-1 min-w-0 truncate font-semibold text-editorial-ink text-right">{m.team_2?.team_name ?? <em className="text-gray-400">TBD</em>}</span>
+														<span className="text-xs text-gray-400 font-mono w-6 text-center shrink-0">{m.table_number ?? "—"}</span>
+														{editingScheduleId === `r1-${m.id}` ? (
+															<input type="time" autoFocus
+																defaultValue={m.scheduled_time ? (() => { const d = new Date(m.scheduled_time); return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; })() : ""}
+																onBlur={(e) => { handleSaveScheduledTime(m.id, e.target.value); setEditingScheduleId(null); }}
+																onKeyDown={(e) => { if (e.key === "Enter") { handleSaveScheduledTime(m.id, (e.target as HTMLInputElement).value); setEditingScheduleId(null); } if (e.key === "Escape") setEditingScheduleId(null); }}
+																className="w-16 border border-editorial-gold px-1 py-0.5 text-[10px] focus:outline-none shrink-0"
+															/>
+														) : (
+															<button onClick={() => setEditingScheduleId(`r1-${m.id}`)} className="text-[10px] font-mono text-gray-400 hover:text-editorial-ink transition-colors w-16 text-center shrink-0">
+																{m.scheduled_time ? new Date(m.scheduled_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : <span className="text-gray-200">—</span>}
+															</button>
+														)}
 														<button
-															onClick={() => setEditingScheduleId(m.id)}
-															className="text-xs text-gray-400 hover:text-editorial-ink transition-colors truncate w-full text-left"
-															title="Click to set scheduled time"
+															onClick={() => handleToggleApproval(m.id, m.scores_approved)}
+															className={`flex items-center gap-1 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest border transition-colors shrink-0 ${m.scores_approved ? "bg-emerald-500 border-emerald-500 text-white hover:bg-emerald-600" : "border-gray-300 text-gray-400 hover:border-emerald-400 hover:text-emerald-500"}`}
+															title={m.scores_approved ? "Scores approved — click to revoke" : "Approve scores"}
 														>
-															{m.scheduled_time
-																? new Date(m.scheduled_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-																: <span className="text-gray-200">Set time…</span>}
+															<CheckCircle size={11} />{m.scores_approved ? "Approved" : "Approve"}
 														</button>
-													)}
-												</div>
-												<button
-													onClick={() => handleToggleApproval(m.id, m.scores_approved)}
-													className={`flex items-center gap-1 px-2 py-1 text-[10px] font-black uppercase tracking-widest border transition-colors shrink-0 ${
-														m.scores_approved
-															? "bg-emerald-500 border-emerald-500 text-white hover:bg-emerald-600 hover:border-emerald-600"
-															: "border-gray-300 text-gray-400 hover:border-emerald-400 hover:text-emerald-500"
-													}}`}
-													title={m.scores_approved ? "Scores approved — click to revoke" : "Approve scores"}
-												>
-													<CheckCircle size={11} />
-													{m.scores_approved ? "Approved" : "Approve"}
-												</button>
-												<button
-													onClick={() =>
-														handleDeleteMatch(m.id)
-													}
-													className="p-1 text-gray-300 hover:text-red-500 transition-colors shrink-0"
-													title="Delete match"
-												>
-													<Trash2 size={13} />
-												</button>
+														<button onClick={() => handleDeleteMatch(m.id)} className="p-1 text-gray-300 hover:text-red-500 transition-colors shrink-0" title="Delete match">
+															<Trash2 size={13} />
+														</button>
+													</div>
+												))}
 											</div>
-										))}
+										)}
+
+										{/* R2/R3/R4: computed pairings + round time */}
+										{(adminQualTab === "r2" || adminQualTab === "r3" || adminQualTab === "r4") && (() => {
+											const roundNum = adminQualTab === "r2" ? 2 : adminQualTab === "r3" ? 3 : 4;
+											const col = adminQualTab === "r2" ? "scheduled_time_r2" : adminQualTab === "r3" ? "scheduled_time_r3" : "scheduled_time_r4" as const;
+											return (
+												<div className="divide-y divide-gray-100">
+													{qualifierMatches.map((m, i) => {
+														const p = qualRoundPairings[adminQualTab].get(m.id);
+														return (
+															<div key={m.id} className={`flex items-center gap-2 px-3 py-2.5 text-sm ${i % 2 === 0 ? "bg-white" : "bg-editorial-bg/30"}`}>
+																<span className="text-[10px] font-black text-gray-300 w-5 shrink-0">{i + 1}</span>
+																<span className="flex-1 min-w-0 truncate font-semibold text-editorial-ink">{p?.t1Name ?? "TBD"}</span>
+																<span className="text-xs text-gray-300 shrink-0">vs</span>
+																<span className="flex-1 min-w-0 truncate font-semibold text-editorial-ink text-right">{p?.t2Name ?? "TBD"}</span>
+																<span className="text-xs text-gray-400 font-mono w-6 text-center shrink-0">{m.table_number ?? "—"}</span>
+																{editingScheduleId === `${adminQualTab}-${m.id}` ? (
+																	<input type="time" autoFocus
+																		defaultValue={m[col] ? (() => { const d = new Date(m[col] as string); return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; })() : ""}
+																		onBlur={(e) => { handleSaveRoundTime(m.id, roundNum as 2|3|4, e.target.value); setEditingScheduleId(null); }}
+																		onKeyDown={(e) => { if (e.key === "Enter") { handleSaveRoundTime(m.id, roundNum as 2|3|4, (e.target as HTMLInputElement).value); setEditingScheduleId(null); } if (e.key === "Escape") setEditingScheduleId(null); }}
+																		className="w-16 border border-editorial-gold px-1 py-0.5 text-[10px] focus:outline-none shrink-0"
+																	/>
+																) : (
+																	<button onClick={() => setEditingScheduleId(`${adminQualTab}-${m.id}`)} className="text-[10px] font-mono text-gray-400 hover:text-editorial-ink transition-colors w-16 text-center shrink-0">
+																		{m[col] ? new Date(m[col] as string).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : <span className="text-gray-200">—</span>}
+																	</button>
+																)}
+															</div>
+														);
+													})}
+												</div>
+											);
+										})()}
 									</div>
 								)}
-							</CollapsiblePanel>
+								</CollapsiblePanel>
 
-							{/* Panel: Standings */}
+								{/* Panel: Standings */}
 							<CollapsiblePanel
 								title={`Qualifier Standings (${standings.length} teams)`}
 								open={standingsOpen}

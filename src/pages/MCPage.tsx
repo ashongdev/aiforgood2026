@@ -114,7 +114,7 @@ function pairingToMatch(pairing: RoundPairing, cat: Category): MatchWithTeams {
 		team_1_r1_absent: false, team_1_r2_absent: false, team_1_r3_absent: false, team_1_r4_absent: false,
 		team_2_r1_absent: false, team_2_r2_absent: false, team_2_r3_absent: false, team_2_r4_absent: false,
 		team_1_final_points: null, team_2_final_points: null,
-		table_number: null, match_order: 0, winner_id: null, updated_at: "", scheduled_time: null, score_breakdown: null, scores_approved: false,
+		table_number: null, match_order: 0, winner_id: null, updated_at: "", scheduled_time: null, score_breakdown: null, scores_approved: false, scheduled_time_r2: null, scheduled_time_r3: null, scheduled_time_r4: null,
 		team_1: makeTeam(pairing.t1),
 		team_2: pairing.t2 ? makeTeam(pairing.t2) : null,
 		winner: null,

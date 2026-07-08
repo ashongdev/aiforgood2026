@@ -19,6 +19,11 @@
 		@apply bg-editorial-bg text-editorial-ink font-sans;
 	}
 }
+
+@keyframes ticker {
+	0%   { transform: translateX(100vw); }
+	100% { transform: translateX(-100%); }
+}
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";

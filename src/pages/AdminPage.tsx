@@ -889,6 +889,9 @@ export function AdminPage() {
 				</div>
 			) : (
 				<div className="w-full px-4 py-6 space-y-3">
+					{/* ─ ANNOUNCEMENT BANNER ─────────────────────────────────── */}
+					<AnnouncementPanel />
+
 					{/* ─ QUALIFIERS TAB ─────────────────────────────────────── */}
 					{activeTab === "qualifiers" && (
 						<>
@@ -4394,6 +4397,140 @@ function AuditTrailPanel() {
 						))}
 					</div>
 				)}
+			</div>
+		</CollapsiblePanel>
+	);
+}
+
+// ─── AnnouncementPanel ────────────────────────────────────────────────────────
+
+type ImportanceLevel = "info" | "warning" | "urgent";
+
+const IMPORTANCE_OPTS: { value: ImportanceLevel; label: string; color: string }[] = [
+	{ value: "info",    label: "Info",   color: "bg-blue-600 text-white" },
+	{ value: "warning", label: "Notice", color: "bg-amber-500 text-white" },
+	{ value: "urgent",  label: "Urgent", color: "bg-red-600 text-white" },
+];
+
+export function AnnouncementPanel() {
+	const [open, setOpen] = useState(false);
+	const [current, setCurrent] = useState<{ message: string; importance: ImportanceLevel } | null>(null);
+	const [draft, setDraft] = useState("");
+	const [importance, setImportance] = useState<ImportanceLevel>("info");
+	const [saving, setSaving] = useState(false);
+	const [clearing, setClearing] = useState(false);
+
+	useEffect(() => {
+		supabase
+			.from("announcements")
+			.select("message, importance")
+			.eq("id", 1)
+			.maybeSingle()
+			.then(({ data }) => {
+				if (data) {
+					setCurrent({ message: data.message, importance: data.importance as ImportanceLevel });
+					setDraft(data.message);
+					setImportance(data.importance as ImportanceLevel);
+				}
+			});
+
+		const channel = supabase
+			.channel("admin-announcements")
+			.on("postgres_changes", { event: "*", schema: "public", table: "announcements" }, (payload) => {
+				if (payload.eventType === "DELETE") {
+					setCurrent(null);
+				} else {
+					const row = payload.new as { message: string; importance: string };
+					setCurrent({ message: row.message, importance: row.importance as ImportanceLevel });
+				}
+			})
+			.subscribe();
+
+		return () => { supabase.removeChannel(channel); };
+	}, []);
+
+	async function send() {
+		if (!draft.trim()) return;
+		setSaving(true);
+		await supabase.from("announcements").upsert({ id: 1, message: draft.trim(), importance, updated_at: new Date().toISOString() });
+		setSaving(false);
+	}
+
+	async function clear() {
+		setClearing(true);
+		await supabase.from("announcements").delete().eq("id", 1);
+		setCurrent(null);
+		setDraft("");
+		setImportance("info");
+		setClearing(false);
+	}
+
+	return (
+		<CollapsiblePanel title={`Announcement Banner${current ? " · Live" : ""}`} open={open} onToggle={() => setOpen(v => !v)}>
+			<div className="p-4 space-y-3">
+				{/* Current live banner */}
+				{current && (
+					<div className={`flex items-center gap-3 px-3 py-2 text-sm font-semibold rounded overflow-hidden ${
+						current.importance === "urgent" ? "bg-red-50 border border-red-200 text-red-800" :
+						current.importance === "warning" ? "bg-amber-50 border border-amber-200 text-amber-800" :
+						"bg-blue-50 border border-blue-200 text-blue-800"
+					}`}>
+						<span className={`shrink-0 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${IMPORTANCE_OPTS.find(o => o.value === current.importance)?.color}`}>
+							{IMPORTANCE_OPTS.find(o => o.value === current.importance)?.label}
+						</span>
+						<span className="truncate flex-1">{current.message}</span>
+						<span className="text-[10px] text-current/60 shrink-0">Live</span>
+					</div>
+				)}
+				{!current && (
+					<p className="text-xs text-gray-400 italic">No active announcement.</p>
+				)}
+
+				{/* Importance selector */}
+				<div className="flex gap-2">
+					{IMPORTANCE_OPTS.map(opt => (
+						<button
+							key={opt.value}
+							onClick={() => setImportance(opt.value)}
+							className={`px-3 py-1.5 text-xs font-black uppercase tracking-widest border-2 transition-colors ${
+								importance === opt.value
+									? `${opt.color} border-transparent`
+									: "bg-white text-gray-400 border-gray-200 hover:border-gray-400"
+							}`}
+						>
+							{opt.label}
+						</button>
+					))}
+				</div>
+
+				{/* Text input */}
+				<textarea
+					value={draft}
+					onChange={e => setDraft(e.target.value)}
+					placeholder="Type your announcement…"
+					rows={3}
+					className="w-full border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:border-editorial-gold resize-none text-editorial-ink placeholder:text-gray-300"
+				/>
+
+				{/* Actions */}
+				<div className="flex gap-2">
+					<button
+						onClick={send}
+						disabled={!draft.trim() || saving}
+						className="flex-1 px-4 py-2 bg-editorial-ink text-editorial-gold text-xs font-black uppercase tracking-widest border-2 border-editorial-ink disabled:opacity-40 hover:bg-editorial-gold hover:text-editorial-ink transition-colors"
+					>
+						{saving ? "Sending…" : current ? "Update" : "Send"}
+					</button>
+					{current && (
+						<button
+							onClick={clear}
+							disabled={clearing}
+							className="px-4 py-2 bg-white text-red-500 text-xs font-black uppercase tracking-widest border-2 border-red-200 hover:bg-red-50 transition-colors disabled:opacity-40"
+						>
+							{clearing ? "…" : "Remove"}
+						</button>
+					)}
+				</div>
 			</div>
 		</CollapsiblePanel>
 	);

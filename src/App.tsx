@@ -2,6 +2,7 @@ import { AnimatePresence } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
 import ReactGA from "react-ga4";
 import { BookOpen, CalendarDays, CloudOff, RotateCcw } from "lucide-react";
+import { AnnouncementBanner } from "./components/AnnouncementBanner";
 import { useOnlineStatus } from "./hooks/useOnlineStatus";
 import { BracketList } from "./components/BracketList";
 import { CategoryToggle } from "./components/CategoryToggle";
@@ -332,6 +333,8 @@ export default function App() {
 	// ── Render ────────────────────────────────────────────────────────────────
 
 	return (
+		<>
+		<AnnouncementBanner />
 		<div className="min-h-screen bg-editorial-bg text-editorial-ink font-sans selection:bg-editorial-gold selection:text-white border-12 md:border-24 border-editorial-ink flex flex-col items-center bg-[url('https://www.transparenttextures.com/patterns/pinstriped-suit.png')] p-6 overflow-x-hidden relative">
 
 			{/* FAB buttons */}
@@ -466,5 +469,6 @@ export default function App() {
 			/>
 		)}
 		</div>
+		</>
 	);
 }

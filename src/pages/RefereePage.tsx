@@ -28,6 +28,7 @@ import {
 	type RoundBreakdown,
 	type ScoringItem,
 } from "../lib/scoring";
+import { getCountryFlag } from "../lib/countryFlag";
 import { supabase } from "../lib/supabase";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
@@ -86,7 +87,7 @@ function computeQualScores(
 	const map = new Map<string, QualTeam>();
 	function add(
 		id: string | null,
-		team: { team_name: string } | null,
+		team: { team_name: string; country?: string | null } | null,
 		scores: (number | null)[],
 	) {
 		if (!id || !team) return;
@@ -97,7 +98,7 @@ function computeQualScores(
 		const e = map.get(id) ?? {
 			id,
 			name: tc(team.team_name),
-			country: null,
+			country: team.country ?? null,
 			score: 0,
 		};
 		e.score += total;
@@ -586,11 +587,19 @@ function DynamicPairingCard({
 				className={`px-4 pt-4 pb-3 ${t1Ahead ? "bg-emerald-50/40" : ""}`}
 			>
 				<div className="flex items-center justify-between mb-2">
-					<span
-						className={`text-lg font-black leading-tight ${t1Ahead ? "text-emerald-700" : "text-editorial-ink"}`}
-					>
-						{t1.name}
-					</span>
+					<div>
+						<span
+							className={`text-lg font-black leading-tight ${t1Ahead ? "text-emerald-700" : "text-editorial-ink"}`}
+						>
+							{t1.name}
+						</span>
+						{(getCountryFlag(t1.country) || t1.country) && (
+							<span className="flex items-center gap-1 mt-0.5">
+								{getCountryFlag(t1.country) && <span className="text-sm leading-none">{getCountryFlag(t1.country)}</span>}
+								{t1.country && <span className="text-[10px] text-gray-400">{t1.country}</span>}
+							</span>
+						)}
+					</div>
 					<span
 						className={`text-2xl font-black font-mono ${t1Score !== null ? "text-emerald-600" : "text-gray-200"}`}
 					>
@@ -637,17 +646,25 @@ function DynamicPairingCard({
 					)}
 				</div>
 				<div className="flex items-center justify-between">
-					<span
-						className={`text-lg font-black leading-tight ${t2Ahead ? "text-emerald-700" : "text-editorial-ink"}`}
-					>
-						{t2 ? (
-							t2.name
-						) : (
-							<span className="font-normal italic text-gray-300 text-base">
-								BYE
+					<div>
+						<span
+							className={`text-lg font-black leading-tight ${t2Ahead ? "text-emerald-700" : "text-editorial-ink"}`}
+						>
+							{t2 ? (
+								t2.name
+							) : (
+								<span className="font-normal italic text-gray-300 text-base">
+									BYE
+								</span>
+							)}
+						</span>
+						{t2 && (getCountryFlag(t2.country) || t2.country) && (
+							<span className="flex items-center gap-1 mt-0.5">
+								{getCountryFlag(t2.country) && <span className="text-sm leading-none">{getCountryFlag(t2.country)}</span>}
+								{t2.country && <span className="text-[10px] text-gray-400">{t2.country}</span>}
 							</span>
 						)}
-					</span>
+					</div>
 					{t2 && (
 						<span
 							className={`text-2xl font-black font-mono ${t2Score !== null ? "text-emerald-600" : "text-gray-200"}`}
@@ -741,11 +758,18 @@ function MatchCard({
 								</span>
 							)}
 						</span>
-						{(match.team_1 as { booth_number?: number | null } | null)?.booth_number && (
-							<span className="block text-[10px] font-mono text-gray-400">
-								Booth #{(match.team_1 as { booth_number?: number | null }).booth_number}
-							</span>
-						)}
+						{(() => {
+							const t1 = match.team_1 as { country?: string | null; booth_number?: number | null } | null;
+							return (<>
+								{(getCountryFlag(t1?.country) || t1?.country) && (
+									<span className="flex items-center gap-1 mt-0.5">
+										{getCountryFlag(t1?.country) && <span className="text-sm leading-none">{getCountryFlag(t1?.country)}</span>}
+										{t1?.country && <span className="text-[10px] text-gray-400">{t1.country}</span>}
+									</span>
+								)}
+								{t1?.booth_number && <span className="block text-[10px] font-mono text-gray-400">Booth #{t1.booth_number}</span>}
+							</>);
+						})()}
 					</div>
 					<span
 						className={`text-2xl font-black font-mono ${t1Total !== null ? "text-emerald-600" : "text-gray-200"}`}
@@ -833,11 +857,18 @@ function MatchCard({
 								</span>
 							)}
 						</span>
-						{(match.team_2 as { booth_number?: number | null } | null)?.booth_number && (
-							<span className="block text-[10px] font-mono text-gray-400">
-								Booth #{(match.team_2 as { booth_number?: number | null }).booth_number}
-							</span>
-						)}
+						{(() => {
+							const t2 = match.team_2 as { country?: string | null; booth_number?: number | null } | null;
+							return (<>
+								{(getCountryFlag(t2?.country) || t2?.country) && (
+									<span className="flex items-center gap-1 mt-0.5">
+										{getCountryFlag(t2?.country) && <span className="text-sm leading-none">{getCountryFlag(t2?.country)}</span>}
+										{t2?.country && <span className="text-[10px] text-gray-400">{t2.country}</span>}
+									</span>
+								)}
+								{t2?.booth_number && <span className="block text-[10px] font-mono text-gray-400">Booth #{t2.booth_number}</span>}
+							</>);
+						})()}
 					</div>
 					<span
 						className={`text-2xl font-black font-mono ${t2Total !== null ? "text-emerald-600" : "text-gray-200"}`}
@@ -1033,7 +1064,7 @@ export function RefereePage() {
 		const { data, error } = await supabase
 			.from("matches")
 			.select(
-				"*, team_1:team_1_id(id,team_name,category,booth_number), team_2:team_2_id(id,team_name,category,booth_number), winner:winner_id(id,team_name,category)",
+				"*, team_1:team_1_id(id,team_name,category,country,booth_number), team_2:team_2_id(id,team_name,category,country,booth_number), winner:winner_id(id,team_name,category)",
 			)
 			.eq("phase", phase)
 			.eq("category", category)
@@ -1504,28 +1535,32 @@ export function RefereePage() {
 				<span>
 					{category === "Junior" ? "Ages 10–14" : "Ages 15–18"}
 				</span>
-				<span className="ml-auto">Active rounds</span>
-				<button
-					onClick={() =>
-						setElimActiveRounds((n) => Math.max(n - 1, 1))
-					}
-					disabled={elimActiveRounds <= 1}
-					className="w-7 h-7 rounded-full bg-gray-100 font-bold text-sm disabled:opacity-30 hover:bg-gray-200 transition-colors"
-				>
-					−
-				</button>
-				<span className="font-black w-4 text-center text-editorial-ink">
-					{elimActiveRounds}
-				</span>
-				<button
-					onClick={() =>
-						setElimActiveRounds((n) => Math.min(n + 1, 4))
-					}
-					disabled={elimActiveRounds >= 4}
-					className="w-7 h-7 rounded-full bg-gray-100 font-bold text-sm disabled:opacity-30 hover:bg-gray-200 transition-colors"
-				>
-					+
-				</button>
+				{!isQualifiers && (
+					<>
+						<span className="ml-auto">Active rounds</span>
+						<button
+							onClick={() =>
+								setElimActiveRounds((n) => Math.max(n - 1, 1))
+							}
+							disabled={elimActiveRounds <= 1}
+							className="w-7 h-7 rounded-full bg-gray-100 font-bold text-sm disabled:opacity-30 hover:bg-gray-200 transition-colors"
+						>
+							−
+						</button>
+						<span className="font-black w-4 text-center text-editorial-ink">
+							{elimActiveRounds}
+						</span>
+						<button
+							onClick={() =>
+								setElimActiveRounds((n) => Math.min(n + 1, 4))
+							}
+							disabled={elimActiveRounds >= 4}
+							className="w-7 h-7 rounded-full bg-gray-100 font-bold text-sm disabled:opacity-30 hover:bg-gray-200 transition-colors"
+						>
+							+
+						</button>
+					</>
+				)}
 			</div>
 
 			{/* Qualifier round selector */}

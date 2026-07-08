@@ -6,6 +6,7 @@ import {
   PENALTY_ITEMS, breakdownKey, computeRoundScore,
   type RoundBreakdown,
 } from "../lib/scoring";
+import { getPairingsForRound } from "../lib/qualPairings";
 import { supabase } from "../lib/supabase";
 
 interface Props {
@@ -95,37 +96,62 @@ export function TeamBreakdownModal({ teamId, teamName, category, phase, onClose 
     let cancelled = false;
     setIsLoading(true);
 
-    supabase
-      .from("matches")
-      .select("*, team_1:team_1_id(id,team_name), team_2:team_2_id(id,team_name)")
-      .or(`team_1_id.eq.${teamId},team_2_id.eq.${teamId}`)
-      .eq("category", category)
-      .order("match_order", { ascending: true })
-      .then(({ data }) => {
-        if (cancelled) return;
-        const infos: RoundInfo[] = [];
-        for (const m of (data as MatchWithTeams[]) ?? []) {
-          const isTeam1 = m.team_1_id === teamId;
-          const opponent = (isTeam1 ? m.team_2?.team_name : m.team_1?.team_name) ?? "TBD";
-          const bdMap = (m.score_breakdown ?? {}) as Record<string, Record<string, number>>;
-          for (let r = 1; r <= 4; r++) {
-            const roundTotal = isTeam1
-              ? (m[`team_1_r${r}` as keyof typeof m] as number | null)
-              : (m[`team_2_r${r}` as keyof typeof m] as number | null);
-            if (roundTotal === null && !bdMap[breakdownKey(isTeam1 ? 1 : 2, r as 1 | 2 | 3 | 4)]) continue;
-            const rawBd = bdMap[breakdownKey(isTeam1 ? 1 : 2, r as 1 | 2 | 3 | 4)];
-            const breakdown = rawBd
-              ? ({ ...EMPTY_BREAKDOWN, ...(rawBd as unknown as Partial<RoundBreakdown>) } as RoundBreakdown)
-              : null;
-            const absent = !!(isTeam1
-              ? (m[`team_1_r${r}_absent` as keyof typeof m] as boolean | null)
-              : (m[`team_2_r${r}_absent` as keyof typeof m] as boolean | null));
-            infos.push({ matchId: m.id, opponent, phase: m.phase, roundNum: r, total: roundTotal, breakdown, absent });
-          }
+    Promise.all([
+      supabase
+        .from("matches")
+        .select("*, team_1:team_1_id(id,team_name), team_2:team_2_id(id,team_name)")
+        .or(`team_1_id.eq.${teamId},team_2_id.eq.${teamId}`)
+        .eq("category", category)
+        .order("match_order", { ascending: true }),
+      supabase
+        .from("matches")
+        .select("*, team_1:team_1_id(id,team_name), team_2:team_2_id(id,team_name)")
+        .eq("phase", "Qualifiers")
+        .eq("category", category)
+        .order("match_order", { ascending: true }),
+    ]).then(([teamRes, allQualRes]) => {
+      if (cancelled) return;
+      const teamMatches = (teamRes.data as MatchWithTeams[]) ?? [];
+      const allQualMatches = (allQualRes.data as MatchWithTeams[]) ?? [];
+
+      // Pre-compute R2/R3/R4 opponents from standings-based pairings
+      function computedOpponent(round: 2 | 3 | 4): string {
+        const pairings = getPairingsForRound(allQualMatches, round);
+        const p = pairings.find(p => p.t1Id === teamId || p.t2Id === teamId);
+        if (!p) return "TBD";
+        return p.t1Id === teamId ? (p.t2Name ?? "BYE") : p.t1Name;
+      }
+
+      const infos: RoundInfo[] = [];
+      for (const m of teamMatches) {
+        const isTeam1 = m.team_1_id === teamId;
+        const r1Opponent = (isTeam1 ? m.team_2?.team_name : m.team_1?.team_name) ?? "TBD";
+        const bdMap = (m.score_breakdown ?? {}) as Record<string, Record<string, number>>;
+        const isQualifier = m.phase === "Qualifiers";
+
+        for (let r = 1; r <= 4; r++) {
+          const roundTotal = isTeam1
+            ? (m[`team_1_r${r}` as keyof typeof m] as number | null)
+            : (m[`team_2_r${r}` as keyof typeof m] as number | null);
+          if (roundTotal === null && !bdMap[breakdownKey(isTeam1 ? 1 : 2, r as 1 | 2 | 3 | 4)]) continue;
+
+          const opponent = isQualifier && r >= 2
+            ? computedOpponent(r as 2 | 3 | 4)
+            : r1Opponent;
+
+          const rawBd = bdMap[breakdownKey(isTeam1 ? 1 : 2, r as 1 | 2 | 3 | 4)];
+          const breakdown = rawBd
+            ? ({ ...EMPTY_BREAKDOWN, ...(rawBd as unknown as Partial<RoundBreakdown>) } as RoundBreakdown)
+            : null;
+          const absent = !!(isTeam1
+            ? (m[`team_1_r${r}_absent` as keyof typeof m] as boolean | null)
+            : (m[`team_2_r${r}_absent` as keyof typeof m] as boolean | null));
+          infos.push({ matchId: m.id, opponent, phase: m.phase, roundNum: r, total: roundTotal, breakdown, absent });
         }
-        setRounds(infos);
-        setIsLoading(false);
-      });
+      }
+      setRounds(infos);
+      setIsLoading(false);
+    });
 
     return () => { cancelled = true; };
   }, [teamId, category]);

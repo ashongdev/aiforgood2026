@@ -5,6 +5,7 @@ import { BookOpen, CalendarDays, CloudOff, RotateCcw } from "lucide-react";
 import { AnnouncementBanner } from "./components/AnnouncementBanner";
 import { useOnlineStatus } from "./hooks/useOnlineStatus";
 import { BracketList } from "./components/BracketList";
+import { KnockoutBracket } from "./components/KnockoutBracket";
 import { CategoryToggle } from "./components/CategoryToggle";
 import { LoadingSpinner } from "./components/LoadingSpinner";
 import { LockedScoreboardScreen } from "./components/LockedScoreboardScreen";
@@ -426,6 +427,11 @@ export default function App() {
 											advanceCount={phaseAdvanceCount}
 											scoresHidden={lockType === "scores"}
 											onViewBreakdown={(id, name) => setBreakdownTeam({ id, name, phase: currentPhase })}
+										/>
+									) : (currentPhase === "Semifinals" || currentPhase === "Third Place" || currentPhase === "Finals") ? (
+										<KnockoutBracket
+											category={supabaseCategory}
+											onSelectMatch={(m) => setSelectedMatch(toMatch(m))}
 										/>
 									) : matches.length === 0 ? (
 										<div className="text-center py-16 text-sm text-gray-400">

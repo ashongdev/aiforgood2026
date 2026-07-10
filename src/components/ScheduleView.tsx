@@ -204,6 +204,7 @@ export function ScheduleView({ category }: { category: Category }) {
 		[tabEntries],
 	);
 
+
 	const nextUpEntry = useMemo(
 		() => allEntries.find((e) => !e.match.winner_id && new Date(e.time).getTime() > now) ?? null,
 		[allEntries, now],
@@ -308,6 +309,7 @@ export function ScheduleView({ category }: { category: Category }) {
 						{search.trim() ? `No matches for "${search}"` : TAB_EMPTY_LABEL[tab]}
 					</p>
 					{!search.trim() && (tab === "r1" || tab === "r2" || tab === "r3" || tab === "r4") && (
+
 						<p className="text-xs text-gray-300">
 							Admins can set {tab.toUpperCase()} times in the Admin panel.
 						</p>
@@ -322,6 +324,8 @@ export function ScheduleView({ category }: { category: Category }) {
 						const hl1 = q ? t1Name.toLowerCase().includes(q) : false;
 						const hl2 = q && t2Name ? t2Name.toLowerCase().includes(q) : false;
 						const isQualRound = round === "r1" || round === "r2" || round === "r3" || round === "r4";
+						const t1Wins = !!m.winner_id && m.winner_id === m.team_1_id;
+						const t2Wins = !!m.winner_id && m.winner_id === m.team_2_id;
 
 						return (
 							<div key={entry.key} className="px-4 py-4 grid grid-cols-[4.5rem_1fr_auto] items-center gap-3">
@@ -341,7 +345,7 @@ export function ScheduleView({ category }: { category: Category }) {
 								{/* Teams */}
 								<div className="min-w-0 flex items-center gap-2">
 									<div className="min-w-0 flex-1">
-										<span className={`block truncate text-sm font-bold ${hl1 ? "text-editorial-gold" : "text-editorial-ink"}`}>
+										<span className={`block truncate text-sm font-bold ${t1Wins || hl1 ? "text-editorial-gold" : t2Wins ? "text-editorial-ink/40" : "text-editorial-ink"}`}>
 											{t1Name}
 										</span>
 										{(getCountryFlag(t1Country) || t1Country) && (
@@ -356,7 +360,7 @@ export function ScheduleView({ category }: { category: Category }) {
 									</div>
 									<span className="text-xs text-gray-300 shrink-0 font-semibold">vs</span>
 									<div className="min-w-0 flex-1 text-right">
-										<span className={`block truncate text-sm font-bold ${hl2 ? "text-editorial-gold" : "text-editorial-ink"}`}>
+										<span className={`block truncate text-sm font-bold ${t2Wins || hl2 ? "text-editorial-gold" : t1Wins ? "text-editorial-ink/40" : "text-editorial-ink"}`}>
 											{t2Name ?? "TBD"}
 										</span>
 										{(getCountryFlag(t2Country) || t2Country) && (
@@ -371,10 +375,10 @@ export function ScheduleView({ category }: { category: Category }) {
 									</div>
 								</div>
 
-								{/* Status chip */}
-								{status !== "upcoming" ? (
-									<span className={`text-xs font-black uppercase tracking-widest px-2 py-1 shrink-0 ${STATUS_STYLES[status]}`}>
-										{status === "live" ? "Live" : "✓"}
+								{/* Status chip — live only; done state shown via gold winner name */}
+								{status === "live" ? (
+									<span className={`text-xs font-black uppercase tracking-widest px-2 py-1 shrink-0 ${STATUS_STYLES["live"]}`}>
+										Live
 									</span>
 								) : (
 									<span />

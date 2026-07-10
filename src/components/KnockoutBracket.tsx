@@ -17,8 +17,8 @@ function BracketCard({
 }) {
 	const t1 = match?.team_1;
 	const t2 = match?.team_2;
-	const t1Score = match?.team_1_final_points ?? null;
-	const t2Score = match?.team_2_final_points ?? null;
+	const t1Score = match?.team_1_final_points ?? match?.team_1_r1 ?? null;
+	const t2Score = match?.team_2_final_points ?? match?.team_2_r1 ?? null;
 	const t1Wins = !!match?.winner_id && match.winner_id === match.team_1_id;
 	const t2Wins = !!match?.winner_id && match.winner_id === match.team_2_id;
 	const decided = !!match?.winner_id;

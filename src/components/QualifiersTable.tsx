@@ -110,7 +110,7 @@ export function QualifiersTable({
 					)}
 					{scoresHidden ? (
 						<span className="flex items-center gap-1 text-amber-600 font-semibold">
-							<Lock size={10} /> Scores hidden by organizers
+							<Lock size={10} /> Verifying scores
 						</span>
 					) : (
 						"tap a row to expand"

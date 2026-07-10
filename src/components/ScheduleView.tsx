@@ -1,13 +1,13 @@
 import { Calendar, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { getCountryFlag } from "../lib/countryFlag";
-import type { Category, MatchWithTeams } from "../lib/database.types";
+import type { Category, MatchWithTeams, Phase } from "../lib/database.types";
 import { tc } from "../lib/format";
 import { getPairingsForRound } from "../lib/qualPairings";
 import { supabase } from "../lib/supabase";
 
 type ScheduleStatus = "upcoming" | "live" | "done";
-type RoundTab = "r1" | "r2" | "r3" | "r4" | "knockout";
+type RoundTab = "r1" | "r2" | "r3" | "r4" | "qf" | "sf" | "3rd" | "final";
 
 interface TabEntry {
 	key: string;
@@ -22,13 +22,35 @@ interface TabEntry {
 	t2Booth?: number | null;
 }
 
+const ELIM_PHASE_TAB: Partial<Record<Phase, RoundTab>> = {
+	"Pre-Quarterfinals": "qf",
+	"Quarterfinals": "qf",
+	"Semifinals": "sf",
+	"Third Place": "3rd",
+	"Finals": "final",
+};
+
 const TABS: { id: RoundTab; label: string }[] = [
-	{ id: "r1", label: "R1" },
-	{ id: "r2", label: "R2" },
-	{ id: "r3", label: "R3" },
-	{ id: "r4", label: "R4" },
-	{ id: "knockout", label: "Knockout" },
+	{ id: "r1",    label: "R1" },
+	{ id: "r2",    label: "R2" },
+	{ id: "r3",    label: "R3" },
+	{ id: "r4",    label: "R4" },
+	{ id: "qf",    label: "Quarters" },
+	{ id: "sf",    label: "Semis" },
+	{ id: "3rd",   label: "3rd Place" },
+	{ id: "final", label: "Final" },
 ];
+
+const TAB_EMPTY_LABEL: Record<RoundTab, string> = {
+	r1:    "No R1 times set yet.",
+	r2:    "No R2 times set yet.",
+	r3:    "No R3 times set yet.",
+	r4:    "No R4 times set yet.",
+	qf:    "No Quarterfinal matches scheduled yet.",
+	sf:    "No Semifinal matches scheduled yet.",
+	"3rd": "No 3rd Place match scheduled yet.",
+	final: "No Final match scheduled yet.",
+};
 
 const STATUS_STYLES: Record<ScheduleStatus, string> = {
 	upcoming: "bg-gray-100 text-gray-500",
@@ -74,7 +96,7 @@ export function ScheduleView({ category }: { category: Category }) {
 		const qual = matches.filter((m) => m.phase === "Qualifiers");
 		const elim = matches.filter((m) => m.phase !== "Qualifiers");
 
-		// Build a team metadata lookup: teamId → { country, booth_number }
+		// Build team metadata lookup: teamId → { country, booth_number }
 		const teamMeta = new Map<string, { country: string | null; booth_number: number | null }>();
 		for (const m of matches) {
 			for (const t of [m.team_1, m.team_2]) {
@@ -87,7 +109,7 @@ export function ScheduleView({ category }: { category: Category }) {
 			}
 		}
 
-		// Pre-compute R2/R3/R4 pairings from standings (same logic as RefereePage)
+		// Pre-compute R2/R3/R4 pairings from standings
 		const r2pairs = getPairingsForRound(qual, 2);
 		const r3pairs = getPairingsForRound(qual, 3);
 		const r4pairs = getPairingsForRound(qual, 4);
@@ -138,35 +160,47 @@ export function ScheduleView({ category }: { category: Category }) {
 				})
 				.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
 
-		const knockoutEntries: TabEntry[] = elim
-			.filter((m) => m.scheduled_time)
-			.map((m) => ({
+		// Group elim matches by phase tab
+		const elimByTab: Record<string, TabEntry[]> = { qf: [], sf: [], "3rd": [], final: [] };
+		for (const m of elim) {
+			if (!m.scheduled_time) continue;
+			const roundTab = ELIM_PHASE_TAB[m.phase as Phase];
+			if (!roundTab) continue;
+			elimByTab[roundTab].push({
 				key: m.id,
 				match: m,
-				time: m.scheduled_time!,
-				round: "knockout" as RoundTab,
+				time: m.scheduled_time,
+				round: roundTab,
 				t1Name: tc(m.team_1?.team_name) || "TBD",
 				t2Name: tc(m.team_2?.team_name) || "TBD",
 				t1Country: (m.team_1 as { country?: string | null } | null)?.country,
 				t2Country: (m.team_2 as { country?: string | null } | null)?.country,
 				t1Booth: (m.team_1 as { booth_number?: number | null } | null)?.booth_number,
 				t2Booth: (m.team_2 as { booth_number?: number | null } | null)?.booth_number,
-			}))
-			.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+			});
+		}
+		for (const key of Object.keys(elimByTab)) {
+			elimByTab[key].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+		}
 
 		return {
 			r1: r1Entries,
 			r2: makeQualEntries("r2", "scheduled_time_r2"),
 			r3: makeQualEntries("r3", "scheduled_time_r3"),
 			r4: makeQualEntries("r4", "scheduled_time_r4"),
-			knockout: knockoutEntries,
+			qf:    elimByTab["qf"],
+			sf:    elimByTab["sf"],
+			"3rd": elimByTab["3rd"],
+			final: elimByTab["final"],
 		};
 	}, [matches]);
 
 	const allEntries = useMemo(
 		() =>
-			[...tabEntries.r1, ...tabEntries.r2, ...tabEntries.r3, ...tabEntries.r4, ...tabEntries.knockout]
-				.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime()),
+			[
+				...tabEntries.r1, ...tabEntries.r2, ...tabEntries.r3, ...tabEntries.r4,
+				...tabEntries.qf, ...tabEntries.sf, ...tabEntries["3rd"], ...tabEntries.final,
+			].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime()),
 		[tabEntries],
 	);
 
@@ -186,6 +220,12 @@ export function ScheduleView({ category }: { category: Category }) {
 				(e.t2Name?.toLowerCase().includes(q) ?? false),
 		);
 	}, [currentEntries, search]);
+
+	const roundLabel = (entry: TabEntry) => {
+		const r = entry.round;
+		if (r === "r1" || r === "r2" || r === "r3" || r === "r4") return r.toUpperCase();
+		return entry.match.phase;
+	};
 
 	if (isLoading) {
 		return <div className="py-16 text-center text-sm text-gray-400">Loading schedule…</div>;
@@ -211,9 +251,7 @@ export function ScheduleView({ category }: { category: Category }) {
 						Next up
 					</span>
 					<span className="text-[10px] font-black uppercase tracking-widest text-gray-400 shrink-0">
-						{nextUpEntry.round === "knockout"
-							? nextUpEntry.match.phase
-							: nextUpEntry.round.toUpperCase()}
+						{roundLabel(nextUpEntry)}
 					</span>
 					<span className="text-sm font-semibold text-editorial-ink">
 						{nextUpEntry.t1Name} vs {nextUpEntry.t2Name ?? "TBD"}
@@ -224,8 +262,8 @@ export function ScheduleView({ category }: { category: Category }) {
 				</div>
 			)}
 
-			{/* Tabs */}
-			<div className="flex border-b border-gray-200">
+			{/* Tabs — scrollable so all 8 fit on mobile */}
+			<div className="flex border-b border-gray-200 overflow-x-auto scrollbar-none">
 				{TABS.map((t) => {
 					const count = tabEntries[t.id].length;
 					const active = tab === t.id;
@@ -233,7 +271,7 @@ export function ScheduleView({ category }: { category: Category }) {
 						<button
 							key={t.id}
 							onClick={() => setTab(t.id)}
-							className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
+							className={`shrink-0 flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
 								active
 									? "border-editorial-gold text-editorial-gold"
 									: "border-transparent text-gray-400 hover:text-editorial-ink"
@@ -267,13 +305,9 @@ export function ScheduleView({ category }: { category: Category }) {
 				<div className="py-12 text-center space-y-1 border border-gray-100">
 					<Calendar size={28} className="mx-auto text-gray-200 mb-2" />
 					<p className="text-sm text-gray-400">
-						{search.trim()
-							? `No matches for "${search}"`
-							: tab === "knockout"
-							? "No elimination matches scheduled yet."
-							: `No ${tab.toUpperCase()} times set yet.`}
+						{search.trim() ? `No matches for "${search}"` : TAB_EMPTY_LABEL[tab]}
 					</p>
-					{!search.trim() && tab !== "knockout" && (
+					{!search.trim() && (tab === "r1" || tab === "r2" || tab === "r3" || tab === "r4") && (
 						<p className="text-xs text-gray-300">
 							Admins can set {tab.toUpperCase()} times in the Admin panel.
 						</p>
@@ -287,16 +321,17 @@ export function ScheduleView({ category }: { category: Category }) {
 						const q = search.trim().toLowerCase();
 						const hl1 = q ? t1Name.toLowerCase().includes(q) : false;
 						const hl2 = q && t2Name ? t2Name.toLowerCase().includes(q) : false;
+						const isQualRound = round === "r1" || round === "r2" || round === "r3" || round === "r4";
 
 						return (
 							<div key={entry.key} className="px-4 py-4 grid grid-cols-[4.5rem_1fr_auto] items-center gap-3">
-								{/* Time + table */}
+								{/* Time + table + round label */}
 								<div className="shrink-0">
 									<p className="text-sm font-bold text-editorial-ink leading-tight">
 										{new Date(time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
 									</p>
 									<p className="text-xs text-gray-400 leading-tight">T{m.table_number ?? "—"}</p>
-									{round !== "knockout" && (
+									{isQualRound && (
 										<span className={`text-[9px] font-black uppercase tracking-widest ${round === "r1" ? "text-editorial-gold" : "text-gray-400"}`}>
 											{round.toUpperCase()}
 										</span>

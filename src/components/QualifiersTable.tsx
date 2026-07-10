@@ -139,7 +139,12 @@ export function QualifiersTable({
 					</span>
 				)}
 				<span className="shrink-0 w-12 text-right text-[10px] font-black uppercase tracking-widest text-white/60">
-					{scoresHidden ? "" : "Total"}
+					{scoresHidden ? "" : (
+						<>
+							<span className="sm:hidden">Best</span>
+							<span className="hidden sm:inline">Total</span>
+						</>
+					)}
 				</span>
 			</div>
 
@@ -254,12 +259,15 @@ export function QualifiersTable({
 												</span>
 											))}
 										</span>
-										<span
-											className={`shrink-0 w-12 text-right text-sm font-black ${isExpanded ? "text-editorial-gold" : standing.total > 0 ? "text-editorial-green" : standing.total < 0 ? "text-red-500" : "text-gray-400"}`}
-										>
-											<AnimatedScore
-												value={String(standing.total)}
-											/>
+										<span className="shrink-0 w-12 text-right">
+											{/* Mobile: best round */}
+											<span className={`sm:hidden text-sm font-black ${isExpanded ? "text-editorial-gold" : standing.best_round > 0 ? "text-editorial-green" : standing.best_round < 0 ? "text-red-500" : "text-gray-400"}`}>
+												<AnimatedScore value={String(standing.best_round)} />
+											</span>
+											{/* Desktop: total */}
+											<span className={`hidden sm:inline text-sm font-black ${isExpanded ? "text-editorial-gold" : standing.total > 0 ? "text-editorial-green" : standing.total < 0 ? "text-red-500" : "text-gray-400"}`}>
+												<AnimatedScore value={String(standing.total)} />
+											</span>
 										</span>
 									</>
 								)}

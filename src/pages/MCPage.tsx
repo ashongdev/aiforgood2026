@@ -8,7 +8,6 @@ import type { Category, MatchWithTeams, Phase, Team } from "../lib/database.type
 
 const PHASES: Phase[] = [
 	"Qualifiers",
-	"Pre-Quarterfinals",
 	"Quarterfinals",
 	"Semifinals",
 	"Third Place",
@@ -17,7 +16,6 @@ const PHASES: Phase[] = [
 
 const PHASE_SHORT: Record<string, string> = {
 	Qualifiers: "QUALS",
-	"Pre-Quarterfinals": "PRE-QF",
 	Quarterfinals: "QF",
 	Semifinals: "SF",
 	"Third Place": "3RD",

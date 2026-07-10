@@ -200,25 +200,15 @@ function nextPhaseFor(phase: Phase): Phase | null {
 function seedPairings(n: AdvanceCount): [number, number][] {
 	if (n === 16)
 		return [
-			[1, 16],
-			[8, 9],
-			[4, 13],
-			[5, 12],
-			[2, 15],
-			[7, 10],
-			[3, 14],
-			[6, 11],
+			[1, 16], [8, 9], [4, 13], [5, 12],
+			[2, 15], [7, 10], [3, 14], [6, 11],
 		];
 	if (n === 8)
 		return [
-			[1, 8],
-			[4, 5],
-			[2, 7],
-			[3, 6],
+			[1, 8], [4, 5], [2, 7], [3, 6],
 		];
 	return [
-		[1, 4],
-		[2, 3],
+		[1, 4], [2, 3],
 	];
 }
 
@@ -332,6 +322,7 @@ export function AdminPage() {
 	const [newTeam1, setNewTeam1] = useState("");
 	const [newTeam2, setNewTeam2] = useState("");
 	const [newTable, setNewTable] = useState("");
+	const [newPhase, setNewPhase] = useState<Phase>("Qualifiers");
 	const [isCreating, setIsCreating] = useState(false);
 	const [createError, setCreateError] = useState<string | null>(null);
 
@@ -512,13 +503,15 @@ export function AdminPage() {
 		}
 
 		setIsCreating(true);
+		const isQual = newPhase === "Qualifiers";
+		const orderBase = isQual ? qualifierMatches.length : elimMatches.length;
 		const { error } = await supabase.from("matches").insert({
-			phase: "Qualifiers",
+			phase: newPhase,
 			category,
 			team_1_id: newTeam1,
 			team_2_id: newTeam2,
 			table_number: newTable ? parseInt(newTable, 10) : null,
-			match_order: qualifierMatches.length + 1,
+			match_order: orderBase + 1,
 		});
 		setIsCreating(false);
 
@@ -1047,8 +1040,8 @@ export function AdminPage() {
 												{advanceCount === 16
 													? "1v16, 8v9, 4v13, 5v12, 2v15, 7v10, 3v14, 6v11 — seeds 1 & 2 cannot meet before the Final."
 													: advanceCount === 8
-														? "1v8, 4v5, 2v7, 3v6 — seeds 1 & 2 cannot meet before the Final."
-														: "1v4, 2v3 — seeds 1 & 2 meet only in the Final."}
+													? "1v8, 4v5, 2v7, 3v6 — seeds 1 & 2 cannot meet before the Final."
+													: "1v4, 2v3 — seeds 1 & 2 meet only in the Final."}
 											</div>
 
 											<button
@@ -1123,11 +1116,30 @@ export function AdminPage() {
 
 							{/* Panel: Add Match */}
 							<CollapsiblePanel
-								title="Add Qualifier Match"
+								title="Add Match"
 								open={addMatchOpen}
 								onToggle={() => setAddMatchOpen((v) => !v)}
 							>
 								<div className="p-5 space-y-4">
+									{/* Phase selector */}
+									<div className="space-y-1">
+										<label className="text-[10px] font-black uppercase tracking-widest">Phase</label>
+										<div className="flex flex-wrap gap-2">
+											{(["Qualifiers", "Quarterfinals", "Semifinals", "Third Place", "Finals"] as Phase[]).map((p) => (
+												<button
+													key={p}
+													onClick={() => setNewPhase(p)}
+													className={`px-3 py-1.5 text-xs font-black uppercase tracking-widest border-2 transition-colors ${
+														newPhase === p
+															? "bg-editorial-ink text-editorial-gold border-editorial-ink"
+															: "bg-white text-gray-400 border-gray-200 hover:border-editorial-ink hover:text-editorial-ink"
+													}`}
+												>
+													{p}
+												</button>
+											))}
+										</div>
+									</div>
 									<div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_100px_auto] gap-3 items-end">
 										<div className="space-y-1">
 											<label className="text-[10px] font-black uppercase tracking-widest">

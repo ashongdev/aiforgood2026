@@ -13,7 +13,6 @@ import { tc } from "../lib/format";
 
 const PHASES: Phase[] = [
 	"Qualifiers",
-	"Pre-Quarterfinals",
 	"Quarterfinals",
 	"Semifinals",
 	"Third Place",

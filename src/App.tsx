@@ -28,7 +28,6 @@ const SPECTATOR_CACHE_PREFIX = "spectator_cache";
 
 const PHASES: Phase[] = [
 	"Qualifiers",
-	"Pre-Quarterfinals",
 	"Quarterfinals",
 	"Semifinals",
 	"Third Place",
@@ -183,10 +182,9 @@ export default function App() {
 	const supabaseCategory: Category = category === "junior" ? "Junior" : "Senior";
 	const isQualifiers = currentPhase === "Qualifiers";
 	// Pre-Quarters and Quarters are NOT H2H — teams compete independently, ranked by total (§h.4.2-4.3)
-	const isLeaderboardPhase = isQualifiers || currentPhase === "Pre-Quarterfinals" || currentPhase === "Quarterfinals";
+	const isLeaderboardPhase = isQualifiers || currentPhase === "Quarterfinals";
 	// How many teams advance from each leaderboard phase
 	const phaseAdvanceCount = isQualifiers ? advanceCount
-		: currentPhase === "Pre-Quarterfinals" ? 8
 		: currentPhase === "Quarterfinals" ? 4
 		: 0;
 	const lockType = phaseLocks[`${currentPhase}_${supabaseCategory}`] ?? null;

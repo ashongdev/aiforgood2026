@@ -35,7 +35,6 @@ import { supabase } from "../lib/supabase";
 
 const PHASES: Phase[] = [
 	"Qualifiers",
-	"Pre-Quarterfinals",
 	"Quarterfinals",
 	"Semifinals",
 	"Third Place",

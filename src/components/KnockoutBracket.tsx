@@ -1,15 +1,179 @@
-import { useEffect, useState } from "react";
+import dagre from "@dagrejs/dagre";
+import {
+	Background,
+	BackgroundVariant,
+	type Edge,
+	Handle,
+	type Node,
+	type NodeProps,
+	Position,
+	ReactFlow,
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
+import { useEffect, useMemo, useState } from "react";
 import { getCountryFlag } from "../lib/countryFlag";
 import type { Category, MatchWithTeams } from "../lib/database.types";
 import { supabase } from "../lib/supabase";
 import { AnimatedScore } from "./AnimatedScore";
 
-// ─── Mini match card ──────────────────────────────────────────────────────────
+// ─── Layout ─────────────────────────────────────────────────────────────────
+
+const NODE_WIDTH = 220;
+const NODE_HEIGHT = 116;
+
+function layout(matchNodes: { id: string; parentId?: string }[]) {
+	const g = new dagre.graphlib.Graph();
+	g.setGraph({ rankdir: "LR", nodesep: 32, ranksep: 72 });
+	g.setDefaultEdgeLabel(() => ({}));
+	for (const n of matchNodes) {
+		g.setNode(n.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
+	}
+	for (const n of matchNodes) {
+		if (n.parentId) g.setEdge(n.id, n.parentId);
+	}
+	dagre.layout(g);
+	const positions: Record<string, { x: number; y: number }> = {};
+	for (const n of matchNodes) {
+		const p = g.node(n.id);
+		positions[n.id] = { x: p.x - NODE_WIDTH / 2, y: p.y - NODE_HEIGHT / 2 };
+	}
+	return positions;
+}
+
+// ─── Match node (rendered inside the ReactFlow canvas) ─────────────────────
 
 interface TeamRef {
 	id: string;
 	name: string;
 }
+
+type OpenBreakdown = (team1: TeamRef, team2: TeamRef | null, initialTeam: 1 | 2) => void;
+
+interface MatchNodeData {
+	match: MatchWithTeams | null;
+	label: string;
+	highlight?: boolean;
+	onOpenBreakdown?: OpenBreakdown;
+	[key: string]: unknown;
+}
+
+function TeamRow({
+	name,
+	country,
+	score,
+	wins,
+	faded,
+	onClick,
+}: {
+	name: string | undefined;
+	country: string | null | undefined;
+	score: number | string | null;
+	wins: boolean;
+	faded: boolean;
+	onClick?: (e: React.MouseEvent) => void;
+}) {
+	return (
+		<div
+			onClick={onClick}
+			className={`flex items-center gap-1.5 px-2.5 py-2 transition-opacity ${faded ? "opacity-35" : ""} ${
+				wins ? "bg-editorial-gold/10" : ""
+			} ${onClick ? "cursor-pointer" : ""}`}
+		>
+			<span className="w-3 shrink-0 text-[10px] leading-none text-editorial-gold">
+				{wins ? "▶" : ""}
+			</span>
+			{getCountryFlag(country) && (
+				<span className="shrink-0 text-sm leading-none">{getCountryFlag(country)}</span>
+			)}
+			<span
+				className={`min-w-0 flex-1 truncate text-xs font-bold ${
+					wins ? "text-editorial-ink" : "text-editorial-ink/80"
+				}`}
+			>
+				{name ?? <span className="font-normal italic text-gray-300">TBD</span>}
+			</span>
+			{score !== null && (
+				<span
+					className={`shrink-0 font-mono text-base font-black ${
+						wins ? "text-editorial-gold" : "text-editorial-ink/50"
+					}`}
+				>
+					<AnimatedScore value={String(score)} />
+				</span>
+			)}
+		</div>
+	);
+}
+
+function MatchFlowNode({ data }: NodeProps & { data: MatchNodeData }) {
+	const { match, label, highlight, onOpenBreakdown } = data;
+	const t1 = match?.team_1;
+	const t2 = match?.team_2;
+	const t1Score = match?.team_1_final_points ?? match?.team_1_r1 ?? null;
+	const t2Score = match?.team_2_final_points ?? match?.team_2_r1 ?? null;
+	const t1Wins = !!match?.winner_id && match.winner_id === match.team_1_id;
+	const t2Wins = !!match?.winner_id && match.winner_id === match.team_2_id;
+	const decided = !!match?.winner_id;
+
+	const team1Ref: TeamRef | null = t1 ? { id: t1.id, name: t1.team_name } : null;
+	const team2Ref: TeamRef | null = t2 ? { id: t2.id, name: t2.team_name } : null;
+	const clickable = !!onOpenBreakdown && !!(team1Ref || team2Ref);
+
+	// Opens the breakdown modal for whichever team was clicked, keeping the
+	// other team (if any) available for the modal's prev/next toggle.
+	function openTeam(slot: 1 | 2) {
+		if (!onOpenBreakdown) return;
+		if (slot === 1 && team1Ref) onOpenBreakdown(team1Ref, team2Ref, 1);
+		else if (slot === 2 && team2Ref) {
+			if (team1Ref) onOpenBreakdown(team1Ref, team2Ref, 2);
+			else onOpenBreakdown(team2Ref, null, 1);
+		}
+	}
+
+	return (
+		<div
+			style={{ width: NODE_WIDTH }}
+			onClick={() => openTeam(1)}
+			className={`overflow-hidden border-2 bg-white shadow-[3px_3px_0px_0px_rgba(26,26,26,0.9)] transition-shadow ${
+				highlight ? "border-editorial-gold" : "border-editorial-ink"
+			} ${clickable ? "cursor-pointer hover:shadow-[5px_5px_0px_0px_rgba(26,26,26,0.9)] active:shadow-none" : ""}`}
+		>
+			<Handle type="target" position={Position.Left} style={{ opacity: 0, pointerEvents: "none" }} />
+			<Handle type="source" position={Position.Right} style={{ opacity: 0, pointerEvents: "none" }} />
+			<div className="flex items-center justify-between bg-editorial-ink px-2.5 py-1">
+				<span className="text-[9px] font-black uppercase tracking-widest text-editorial-gold">
+					{label}
+				</span>
+				{decided && (
+					<span className="text-[9px] font-black uppercase tracking-widest text-white/40">
+						Final
+					</span>
+				)}
+			</div>
+			<TeamRow
+				name={t1?.team_name}
+				country={t1?.country}
+				score={t1Score}
+				wins={t1Wins}
+				faded={t2Wins}
+				onClick={team1Ref ? (e) => { e.stopPropagation(); openTeam(1); } : undefined}
+			/>
+			<div className="h-px bg-editorial-ink/10" />
+			<TeamRow
+				name={t2?.team_name}
+				country={t2?.country}
+				score={t2Score}
+				wins={t2Wins}
+				faded={t1Wins}
+				onClick={team2Ref ? (e) => { e.stopPropagation(); openTeam(2); } : undefined}
+			/>
+		</div>
+	);
+}
+
+const nodeTypes = { match: MatchFlowNode };
+
+// ─── Mini match card for the standalone 3rd place match ────────────────────
 
 function BracketCard({
 	match,
@@ -18,7 +182,7 @@ function BracketCard({
 }: {
 	match: MatchWithTeams | null;
 	label: string;
-	onOpenBreakdown?: (team1: TeamRef, team2: TeamRef | null, initialTeam: 1 | 2) => void;
+	onOpenBreakdown?: OpenBreakdown;
 }) {
 	const t1 = match?.team_1;
 	const t2 = match?.team_2;
@@ -32,8 +196,6 @@ function BracketCard({
 	const team2Ref: TeamRef | null = t2 ? { id: t2.id, name: t2.team_name } : null;
 	const isClickable = !!onOpenBreakdown && !!(team1Ref || team2Ref);
 
-	// Opens the breakdown modal for whichever team was tapped, keeping the
-	// other team (if any) available for the modal's prev/next toggle.
 	function openTeam(slot: 1 | 2) {
 		if (!onOpenBreakdown) return;
 		if (slot === 1 && team1Ref) onOpenBreakdown(team1Ref, team2Ref, 1);
@@ -43,14 +205,13 @@ function BracketCard({
 		}
 	}
 
-	const cardContent = (
+	return (
 		<div
 			className={`border-2 border-editorial-ink bg-white shadow-[3px_3px_0px_0px_rgba(26,26,26,0.9)] ${
 				isClickable ? "cursor-pointer hover:shadow-[5px_5px_0px_0px_rgba(26,26,26,0.9)] transition-shadow active:shadow-none" : ""
 			}`}
 			onClick={() => openTeam(1)}
 		>
-			{/* Header bar */}
 			<div className="flex items-center justify-between px-2.5 py-1 bg-editorial-ink">
 				<span className="text-[9px] font-black uppercase tracking-widest text-editorial-gold">
 					{label}
@@ -60,100 +221,33 @@ function BracketCard({
 						Final
 					</span>
 				)}
-				{isClickable && !decided && (
-					<span className="text-[9px] font-black text-white/30 uppercase tracking-widest">
-						Tap
-					</span>
-				)}
 			</div>
-
-			{/* Team 1 */}
-			<div
+			<TeamRow
+				name={t1?.team_name}
+				country={t1?.country}
+				score={t1Score}
+				wins={t1Wins}
+				faded={t2Wins}
 				onClick={team1Ref ? (e) => { e.stopPropagation(); openTeam(1); } : undefined}
-				className={`flex items-center gap-1.5 px-2.5 py-2.5 border-b border-editorial-ink/10 transition-opacity ${
-					t2Wins ? "opacity-35" : ""
-				} ${t1Wins ? "bg-editorial-gold/10" : ""}`}
-			>
-				<span className="text-editorial-gold text-[10px] leading-none shrink-0 w-3">
-					{t1Wins ? "▶" : ""}
-				</span>
-				{getCountryFlag(t1?.country) && (
-					<span className="text-sm leading-none shrink-0">
-						{getCountryFlag(t1?.country)}
-					</span>
-				)}
-				<span
-					className={`flex-1 text-xs font-bold truncate min-w-0 ${
-						t1Wins ? "text-editorial-ink" : "text-editorial-ink/80"
-					}`}
-				>
-					{t1?.team_name ?? (
-						<span className="text-gray-300 font-normal italic">TBD</span>
-					)}
-				</span>
-				{t1Score !== null && (
-					<span
-						className={`font-mono text-base font-black shrink-0 ${
-							t1Wins ? "text-editorial-gold" : "text-editorial-ink/50"
-						}`}
-					>
-						<AnimatedScore value={String(t1Score)} />
-					</span>
-				)}
-			</div>
-
-			{/* VS row */}
-			<div className="flex items-center justify-center px-2.5 py-1">
-				<span className="text-[9px] font-black text-gray-300 uppercase tracking-widest">
-					vs
-				</span>
-			</div>
-
-			{/* Team 2 */}
-			<div
+			/>
+			<div className="h-px bg-editorial-ink/10" />
+			<TeamRow
+				name={t2?.team_name}
+				country={t2?.country}
+				score={t2Score}
+				wins={t2Wins}
+				faded={t1Wins}
 				onClick={team2Ref ? (e) => { e.stopPropagation(); openTeam(2); } : undefined}
-				className={`flex items-center gap-1.5 px-2.5 py-2.5 border-t border-editorial-ink/10 transition-opacity ${
-					t1Wins ? "opacity-35" : ""
-				} ${t2Wins ? "bg-editorial-gold/10" : ""}`}
-			>
-				<span className="text-editorial-gold text-[10px] leading-none shrink-0 w-3">
-					{t2Wins ? "▶" : ""}
-				</span>
-				{getCountryFlag(t2?.country) && (
-					<span className="text-sm leading-none shrink-0">
-						{getCountryFlag(t2?.country)}
-					</span>
-				)}
-				<span
-					className={`flex-1 text-xs font-bold truncate min-w-0 ${
-						t2Wins ? "text-editorial-ink" : "text2editorial-ink/80"
-					}`}
-				>
-					{t2?.team_name ?? (
-						<span className="text-gray-300 font-normal italic">TBD</span>
-					)}
-				</span>
-				{t2Score !== null && (
-					<span
-						className={`font-mono text-base font-black shrink-0 ${
-							t2Wins ? "text-editorial-gold" : "text-editorial-ink/50"
-						}`}
-					>
-						<AnimatedScore value={String(t2Score)} />
-					</span>
-				)}
-			</div>
+			/>
 		</div>
 	);
-
-	return cardContent;
 }
 
 // ─── Self-contained bracket that fetches its own data ─────────────────────────
 
 interface KnockoutBracketProps {
 	category: Category;
-	onOpenBreakdown?: (team1: TeamRef, team2: TeamRef | null, initialTeam: 1 | 2) => void;
+	onOpenBreakdown?: OpenBreakdown;
 }
 
 export function KnockoutBracket({ category, onOpenBreakdown }: KnockoutBracketProps) {
@@ -199,6 +293,32 @@ export function KnockoutBracket({ category, onOpenBreakdown }: KnockoutBracketPr
 	const champion = finalMatch?.winner ?? null;
 	const bronzeWinner = thirdMatch?.winner ?? null;
 
+	const { nodes, edges } = useMemo<{ nodes: Node[]; edges: Edge[] }>(() => {
+		const positions = layout([
+			{ id: "sf1", parentId: "final" },
+			{ id: "sf2", parentId: "final" },
+			{ id: "final" },
+		]);
+		const mk = (id: string, match: MatchWithTeams | null, label: string, highlight = false): Node => ({
+			id,
+			type: "match",
+			position: positions[id],
+			data: { match, label, highlight, onOpenBreakdown } satisfies MatchNodeData,
+			draggable: false,
+		});
+		return {
+			nodes: [
+				mk("sf1", sf1, "Semi-Final 1"),
+				mk("sf2", sf2, "Semi-Final 2"),
+				mk("final", finalMatch, "Final", true),
+			],
+			edges: [
+				{ id: "e-sf1-final", source: "sf1", target: "final", type: "smoothstep", style: { stroke: "var(--color-editorial-ink)", strokeWidth: 2, opacity: 0.25 } },
+				{ id: "e-sf2-final", source: "sf2", target: "final", type: "smoothstep", style: { stroke: "var(--color-editorial-ink)", strokeWidth: 2, opacity: 0.25 } },
+			],
+		};
+	}, [sf1, sf2, finalMatch, onOpenBreakdown]);
+
 	if (isLoading) {
 		return (
 			<div className="py-16 text-center text-sm text-gray-400">
@@ -232,105 +352,41 @@ export function KnockoutBracket({ category, onOpenBreakdown }: KnockoutBracketPr
 				</p>
 			</div>
 
-			{/* ── MOBILE: horizontal scroll pager — each section nearly full-width,
-			     connector (1.5rem) peeks at the right/left edge as a scroll cue ── */}
-			<div
-				className="md:hidden overflow-x-auto snap-x snap-mandatory scrollbar-none flex"
-				style={{ scrollPaddingLeft: "1.5rem" }}
-			>
-				{/* SF section — width = 100% minus connector width so connector peeks */}
-				<div className="snap-start shrink-0 w-[calc(100%-1.5rem)] flex flex-col gap-4 pr-3 py-1">
-					<div>
-						<p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1.5">
-							Semi-Final 1
-						</p>
-						<BracketCard match={sf1} label="SF 1" onOpenBreakdown={onOpenBreakdown} />
-					</div>
-					<div>
-						<p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1.5">
-							Semi-Final 2
-						</p>
-						<BracketCard match={sf2} label="SF 2" onOpenBreakdown={onOpenBreakdown} />
-					</div>
-				</div>
-
-				{/* Connector — peeks at right when on SF, peeks at left when on Final */}
-				<div className="shrink-0 w-6 self-stretch flex flex-col">
-					<div className="flex-1 border-r-2 border-b-2 border-editorial-ink/25" />
-					<div className="flex-1 border-r-2 border-t-2 border-editorial-ink/25" />
-				</div>
-
-				{/* Final section */}
-				<div className="snap-start shrink-0 w-[calc(100%-1.5rem)] flex flex-col justify-center gap-2 pl-3 py-1">
-					<p className="text-[9px] font-black uppercase tracking-widest text-editorial-gold">
-						Final
-					</p>
-					<BracketCard match={finalMatch} label="Final" onOpenBreakdown={onOpenBreakdown} />
-					{champion ? (
-						<div className="flex items-center gap-2 mt-1">
-							<span className="text-base leading-none">🏆</span>
-							<span className="text-xs font-black uppercase tracking-widest text-editorial-gold line-clamp-2">
-								{champion.team_name}
-							</span>
-						</div>
-					) : (
-						<div className="flex items-center gap-2 mt-1 opacity-40">
-							<span className="text-base leading-none">🏆</span>
-							<span className="text-xs font-black uppercase tracking-widest text-gray-400">
-								TBD
-							</span>
-						</div>
-					)}
-				</div>
+			{/* ── Bracket canvas — auto-laid-out with dagre ── */}
+			<div className="h-[340px] w-full border-2 border-editorial-ink bg-gray-50 sm:h-[380px]">
+				<ReactFlow
+					nodes={nodes}
+					edges={edges}
+					nodeTypes={nodeTypes}
+					fitView
+					fitViewOptions={{ padding: 0.25 }}
+					minZoom={0.35}
+					maxZoom={1.25}
+					nodesDraggable={false}
+					nodesConnectable={false}
+					panOnScroll
+					zoomOnScroll={false}
+					proOptions={{ hideAttribution: true }}
+				>
+					<Background variant={BackgroundVariant.Dots} gap={20} size={1} color="rgba(26,26,26,0.15)" />
+				</ReactFlow>
 			</div>
 
-			{/* ── DESKTOP: side-by-side 3-column grid ── */}
-			<div className="hidden md:grid grid-cols-[1fr_40px_1fr] items-stretch">
-				{/* SF column */}
-				<div className="flex flex-col">
-					<div className="flex-1 flex flex-col justify-center py-3 pr-4">
-						<p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-2">
-							Semi-Final 1
-						</p>
-						<BracketCard match={sf1} label="SF 1" onOpenBreakdown={onOpenBreakdown} />
-					</div>
-					<div className="flex-1 flex flex-col justify-center py-3 pr-4">
-						<p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-2">
-							Semi-Final 2
-						</p>
-						<BracketCard match={sf2} label="SF 2" onOpenBreakdown={onOpenBreakdown} />
-					</div>
+			{champion ? (
+				<div className="flex items-center justify-center gap-2">
+					<span className="text-lg leading-none">🏆</span>
+					<span className="text-xs font-black uppercase tracking-widest text-editorial-gold">
+						{champion.team_name}
+					</span>
 				</div>
-
-				{/* Connector */}
-				<div className="flex flex-col">
-					<div className="flex-1 border-r-2 border-b-2 border-editorial-ink/20" />
-					<div className="flex-1 border-r-2 border-t-2 border-editorial-ink/20" />
+			) : (
+				<div className="flex items-center justify-center gap-2 opacity-40">
+					<span className="text-lg leading-none">🏆</span>
+					<span className="text-xs font-black uppercase tracking-widest text-gray-400">
+						Champion TBD
+					</span>
 				</div>
-
-				{/* Final column */}
-				<div className="flex flex-col justify-center pl-4 gap-2">
-					<p className="text-[9px] font-black uppercase tracking-widest text-editorial-gold">
-						Final
-					</p>
-					<BracketCard match={finalMatch} label="Final" onOpenBreakdown={onOpenBreakdown} />
-					{champion ? (
-						<div className="flex items-center gap-2 mt-1">
-							<span className="text-lg leading-none">🏆</span>
-							<span className="text-xs font-black uppercase tracking-widest text-editorial-gold">
-								{champion.team_name}
-							</span>
-						</div>
-					) : (
-						<div className="flex items-center gap-2 mt-1 opacity-40">
-							<span className="text-lg leading-none">🏆</span>
-							<span className="text-xs font-black uppercase tracking-widest text-gray-400">
-								Champion TBD
-							</span>
-						</div>
-					)}
-				</div>
-			</div>
+			)}
 
 			{/* ── 3rd Place ── */}
 			{(thirdMatch || (sf1 && sf2)) && (
@@ -342,18 +398,18 @@ export function KnockoutBracket({ category, onOpenBreakdown }: KnockoutBracketPr
 						</p>
 						<div className="h-px flex-1 bg-gray-100" />
 					</div>
-					<div className="md:max-w-xs">
+					<div className="mx-auto md:max-w-xs">
 						<BracketCard match={thirdMatch} label="3rd Place" onOpenBreakdown={onOpenBreakdown} />
 					</div>
 					{bronzeWinner ? (
-						<div className="flex items-center gap-2 mt-2 px-1">
+						<div className="flex items-center gap-2 mt-2 px-1 justify-center md:justify-start">
 							<span className="text-lg leading-none">🥉</span>
 							<span className="text-xs font-black uppercase tracking-widest text-amber-600">
 								{bronzeWinner.team_name}
 							</span>
 						</div>
 					) : thirdMatch ? (
-						<div className="flex items-center gap-2 mt-2 px-1 opacity-40">
+						<div className="flex items-center gap-2 mt-2 px-1 opacity-40 justify-center md:justify-start">
 							<span className="text-lg leading-none">🥉</span>
 							<span className="text-xs font-black uppercase tracking-widest text-gray-400">
 								3rd Place TBD

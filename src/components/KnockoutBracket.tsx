@@ -134,9 +134,9 @@ function MatchFlowNode({ data }: NodeProps & { data: MatchNodeData }) {
 		<div
 			style={{ width: NODE_WIDTH }}
 			onClick={() => openTeam(1)}
-			className={`overflow-hidden border-2 bg-white shadow-[3px_3px_0px_0px_rgba(26,26,26,0.9)] transition-shadow ${
-				highlight ? "border-editorial-gold" : "border-editorial-ink"
-			} ${clickable ? "cursor-pointer hover:shadow-[5px_5px_0px_0px_rgba(26,26,26,0.9)] active:shadow-none" : ""}`}
+			className={`overflow-hidden rounded-xl border bg-editorial-bg shadow-sm transition-shadow ${
+				highlight ? "border-editorial-gold" : "border-gray-200"
+			} ${clickable ? "cursor-pointer hover:shadow-md" : ""}`}
 		>
 			<Handle type="target" position={Position.Left} style={{ opacity: 0, pointerEvents: "none" }} />
 			<Handle type="source" position={Position.Right} style={{ opacity: 0, pointerEvents: "none" }} />
@@ -207,8 +207,8 @@ function BracketCard({
 
 	return (
 		<div
-			className={`border-2 border-editorial-ink bg-white shadow-[3px_3px_0px_0px_rgba(26,26,26,0.9)] ${
-				isClickable ? "cursor-pointer hover:shadow-[5px_5px_0px_0px_rgba(26,26,26,0.9)] transition-shadow active:shadow-none" : ""
+			className={`rounded-xl border border-gray-200 bg-editorial-bg shadow-sm overflow-hidden ${
+				isClickable ? "cursor-pointer hover:shadow-md transition-shadow" : ""
 			}`}
 			onClick={() => openTeam(1)}
 		>
@@ -304,7 +304,7 @@ export function KnockoutBracket({ category, onOpenBreakdown }: KnockoutBracketPr
 			type: "match",
 			position: positions[id],
 			data: { match, label, highlight, onOpenBreakdown } satisfies MatchNodeData,
-			draggable: false,
+			draggable: true,
 		});
 		return {
 			nodes: [
@@ -313,8 +313,8 @@ export function KnockoutBracket({ category, onOpenBreakdown }: KnockoutBracketPr
 				mk("final", finalMatch, "Final", true),
 			],
 			edges: [
-				{ id: "e-sf1-final", source: "sf1", target: "final", type: "smoothstep", style: { stroke: "var(--color-editorial-ink)", strokeWidth: 2, opacity: 0.25 } },
-				{ id: "e-sf2-final", source: "sf2", target: "final", type: "smoothstep", style: { stroke: "var(--color-editorial-ink)", strokeWidth: 2, opacity: 0.25 } },
+				{ id: "e-sf1-final", source: "sf1", target: "final", type: "smoothstep", style: { stroke: "#d1d5db", strokeWidth: 2 } },
+				{ id: "e-sf2-final", source: "sf2", target: "final", type: "smoothstep", style: { stroke: "#d1d5db", strokeWidth: 2 } },
 			],
 		};
 	}, [sf1, sf2, finalMatch, onOpenBreakdown]);
@@ -352,8 +352,8 @@ export function KnockoutBracket({ category, onOpenBreakdown }: KnockoutBracketPr
 				</p>
 			</div>
 
-			{/* ── Bracket canvas — auto-laid-out with dagre ── */}
-			<div className="h-[340px] w-full border-2 border-editorial-ink bg-gray-50 sm:h-[380px]">
+			{/* ── Bracket canvas — auto-laid-out with dagre, nodes can be dragged to rearrange ── */}
+			<div className="h-100 w-full rounded-xl border border-gray-200 bg-gray-100 sm:h-130">
 				<ReactFlow
 					nodes={nodes}
 					edges={edges}
@@ -362,13 +362,13 @@ export function KnockoutBracket({ category, onOpenBreakdown }: KnockoutBracketPr
 					fitViewOptions={{ padding: 0.25 }}
 					minZoom={0.35}
 					maxZoom={1.25}
-					nodesDraggable={false}
+					nodesDraggable
 					nodesConnectable={false}
 					panOnScroll
 					zoomOnScroll={false}
 					proOptions={{ hideAttribution: true }}
 				>
-					<Background variant={BackgroundVariant.Dots} gap={20} size={1} color="rgba(26,26,26,0.15)" />
+					<Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#d1d5db" />
 				</ReactFlow>
 			</div>
 

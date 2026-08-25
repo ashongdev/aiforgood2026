@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, ChevronRight, X } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, X } from "lucide-react";
 import type { Category, MatchWithTeams } from "../lib/database.types";
 import {
   ALL_SCORING_ITEMS, EMPTY_BREAKDOWN, MISSION_1_ITEMS, MISSION_2_ITEMS,
@@ -9,9 +9,15 @@ import {
 import { getPairingsForRound } from "../lib/qualPairings";
 import { supabase } from "../lib/supabase";
 
+interface TeamRef {
+  id: string;
+  name: string;
+}
+
 interface Props {
-  teamId: string;
-  teamName: string;
+  team1: TeamRef;
+  team2?: TeamRef | null;
+  initialTeam?: 1 | 2;
   category: Category;
   phase?: string;
   onClose: () => void;
@@ -87,10 +93,20 @@ function BreakdownSection({
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
 
-export function TeamBreakdownModal({ teamId, teamName, category, phase, onClose }: Props) {
+export function TeamBreakdownModal({ team1, team2, initialTeam = 1, category, phase, onClose }: Props) {
+  const [activeTeam, setActiveTeam] = useState<1 | 2>(team2 ? initialTeam : 1);
+  const active = activeTeam === 2 && team2 ? team2 : team1;
+  const teamId = active.id;
+  const teamName = active.name;
+
   const [rounds, setRounds] = useState<RoundInfo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selected, setSelected] = useState<RoundInfo | null>(null);
+
+  function switchTeam(next: 1 | 2) {
+    setActiveTeam(next);
+    setSelected(null);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -177,9 +193,31 @@ export function TeamBreakdownModal({ teamId, teamName, category, phase, onClose 
     return (
       <Wrapper>
         <div className="flex items-start justify-between px-5 pt-5 pb-4 border-b border-gray-100">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{category} · Score Breakdown</p>
-            <h2 className="text-xl font-black text-editorial-ink">{teamName}</h2>
+          <div className="flex min-w-0 items-center gap-1.5">
+            {team2 && (
+              <button
+                onClick={() => switchTeam(1)}
+                disabled={activeTeam === 1}
+                className="shrink-0 p-1 text-gray-400 transition-colors hover:text-editorial-ink disabled:opacity-25"
+                aria-label="Previous team"
+              >
+                <ChevronLeft size={18} />
+              </button>
+            )}
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{category} · Score Breakdown</p>
+              <h2 className="truncate text-xl font-black text-editorial-ink">{teamName}</h2>
+            </div>
+            {team2 && (
+              <button
+                onClick={() => switchTeam(2)}
+                disabled={activeTeam === 2}
+                className="shrink-0 p-1 text-gray-400 transition-colors hover:text-editorial-ink disabled:opacity-25"
+                aria-label="Next team"
+              >
+                <ChevronRight size={18} />
+              </button>
+            )}
           </div>
           <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-700"><X size={20} /></button>
         </div>
@@ -266,9 +304,31 @@ export function TeamBreakdownModal({ teamId, teamName, category, phase, onClose 
     <Wrapper>
       {/* Header */}
       <div className="flex items-start justify-between px-5 pt-5 pb-4 border-b border-gray-100">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{category} · Score Breakdown</p>
-          <h2 className="text-xl font-black text-editorial-ink leading-tight">{teamName}</h2>
+        <div className="flex min-w-0 items-center gap-1.5">
+          {team2 && (
+            <button
+              onClick={() => switchTeam(1)}
+              disabled={activeTeam === 1}
+              className="shrink-0 p-1 text-gray-400 transition-colors hover:text-editorial-ink disabled:opacity-25"
+              aria-label="Previous team"
+            >
+              <ChevronLeft size={18} />
+            </button>
+          )}
+          <div className="min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{category} · Score Breakdown</p>
+            <h2 className="truncate text-xl font-black text-editorial-ink leading-tight">{teamName}</h2>
+          </div>
+          {team2 && (
+            <button
+              onClick={() => switchTeam(2)}
+              disabled={activeTeam === 2}
+              className="shrink-0 p-1 text-gray-400 transition-colors hover:text-editorial-ink disabled:opacity-25"
+              aria-label="Next team"
+            >
+              <ChevronRight size={18} />
+            </button>
+          )}
         </div>
         <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-700 mt-1"><X size={20} /></button>
       </div>

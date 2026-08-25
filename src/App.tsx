@@ -1,4 +1,3 @@
-import { AnimatePresence } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
 import ReactGA from "react-ga4";
 import { BookOpen, CalendarDays, CloudOff, RotateCcw } from "lucide-react";
@@ -9,7 +8,6 @@ import { KnockoutBracket } from "./components/KnockoutBracket";
 import { CategoryToggle } from "./components/CategoryToggle";
 import { LoadingSpinner } from "./components/LoadingSpinner";
 import { LockedScoreboardScreen } from "./components/LockedScoreboardScreen";
-import { MatchDetailView } from "./components/MatchDetailView";
 import { PhaseNavigation } from "./components/PhaseNavigation";
 import { QualifiersTable } from "./components/QualifiersTable";
 import type { SpectatorStanding } from "./components/QualifiersTable";
@@ -17,7 +15,6 @@ import { RulesPage } from "./components/RulesPage";
 import { ScheduleView } from "./components/ScheduleView";
 import { TeamBreakdownModal } from "./components/TeamBreakdownModal";
 import { TeamShowcase } from "./components/TeamShowcase";
-import { useEffects } from "./hooks/useEffects";
 import { supabase } from "./lib/supabase";
 import { tc } from "./lib/format";
 import type { Category, MatchWithTeams, Phase, Team } from "./lib/database.types";
@@ -174,10 +171,13 @@ export default function App() {
 	const [cachedAt, setCachedAt] = useState<Date | null>(null);
 	const [advanceCount, setAdvanceCount] = useState(0);
 	const [phaseLocks, setPhaseLocks] = useState<Record<string, string>>({});
-	const [selectedMatch, setSelectedMatch] = useState<LegacyMatch | null>(null);
 	const [currentPage, setCurrentPage] = useState<"bracket" | "rules" | "schedule">("bracket");
-	const [breakdownTeam, setBreakdownTeam] = useState<{ id: string; name: string; phase: string } | null>(null);
-	const { effects, triggerEffect } = useEffects();
+	const [breakdownTeam, setBreakdownTeam] = useState<{
+		team1: { id: string; name: string };
+		team2: { id: string; name: string } | null;
+		initialTeam: 1 | 2;
+		phase: string;
+	} | null>(null);
 
 	const currentPhase = PHASES[phaseIndex];
 	const supabaseCategory: Category = category === "junior" ? "Junior" : "Senior";
@@ -384,10 +384,8 @@ export default function App() {
 					<ScheduleView category={supabaseCategory} />
 				</div>
 			) : (
-				<AnimatePresence mode="wait">
-					{!selectedMatch ? (
-						<div className="w-full flex flex-col items-center">
-							<CategoryToggle category={category} onChange={setCategory} />
+					<div className="w-full flex flex-col items-center">
+						<CategoryToggle category={category} onChange={setCategory} />
 
 							{/* Offline / cached data banner */}
 							{(!isOnline || cachedAt) && (
@@ -422,51 +420,37 @@ export default function App() {
 									) : isQualifiers && matches.length === 0 ? (
 										<TeamShowcase teams={teams} category={supabaseCategory} />
 									) : isLeaderboardPhase ? (
-										<QualifiersTable
-											standings={spectatorStandings}
-											advanceCount={phaseAdvanceCount}
-											scoresHidden={lockType === "scores"}
-											onViewBreakdown={(id, name) => setBreakdownTeam({ id, name, phase: currentPhase })}
-										/>
-									) : (currentPhase === "Semifinals" || currentPhase === "Third Place" || currentPhase === "Finals") ? (
-										<KnockoutBracket
-											category={supabaseCategory}
-											onSelectMatch={(m) => setSelectedMatch(toMatch(m))}
-										/>
-									) : matches.length === 0 ? (
-										<div className="text-center py-16 text-sm text-gray-400">
-											No matches scheduled for {currentPhase} yet.
-										</div>
-									) : (
-										<BracketList
-											matches={legacyMatches}
-											onSelectMatch={setSelectedMatch}
-											onTeamBreakdown={(id, name) => setBreakdownTeam({ id, name, phase: currentPhase })}
-										/>
-									)}
-								</>
-							)}
-						</div>
-					) : (
-						<MatchDetailView
-							match={selectedMatch}
-							currentPhase={phaseIndex}
-							shared={false}
-							effects={effects}
-							onBack={() => setSelectedMatch(null)}
-							onCheerLeft={() => triggerEffect("cheer", "left")}
-							onBooLeft={() => triggerEffect("boo", "left")}
-							onCheerRight={() => triggerEffect("cheer", "right")}
-							onBooRight={() => triggerEffect("boo", "right")}
-						/>
-					)}
-				</AnimatePresence>
+									<QualifiersTable
+										standings={spectatorStandings}
+										advanceCount={phaseAdvanceCount}
+										scoresHidden={lockType === "scores"}
+										onViewBreakdown={(id, name) => setBreakdownTeam({ team1: { id, name }, team2: null, initialTeam: 1, phase: currentPhase })}
+									/>
+								) : (currentPhase === "Semifinals" || currentPhase === "Third Place" || currentPhase === "Finals") ? (
+									<KnockoutBracket
+										category={supabaseCategory}
+										onOpenBreakdown={(team1, team2, initialTeam) => setBreakdownTeam({ team1, team2, initialTeam, phase: currentPhase })}
+									/>
+								) : matches.length === 0 ? (
+									<div className="text-center py-16 text-sm text-gray-400">
+										No matches scheduled for {currentPhase} yet.
+									</div>
+								) : (
+									<BracketList
+										matches={legacyMatches}
+										onOpenBreakdown={(team1, team2, initialTeam) => setBreakdownTeam({ team1, team2, initialTeam, phase: currentPhase })}
+									/>
+								)}
+							</>
+						)}
+					</div>
 			)}
 
 		{breakdownTeam && (
 			<TeamBreakdownModal
-				teamId={breakdownTeam.id}
-				teamName={breakdownTeam.name}
+				team1={breakdownTeam.team1}
+				team2={breakdownTeam.team2}
+				initialTeam={breakdownTeam.initialTeam}
 				phase={breakdownTeam.phase}
 				category={supabaseCategory}
 				onClose={() => setBreakdownTeam(null)}

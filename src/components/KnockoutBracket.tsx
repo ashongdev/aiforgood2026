@@ -6,14 +6,19 @@ import { AnimatedScore } from "./AnimatedScore";
 
 // ─── Mini match card ──────────────────────────────────────────────────────────
 
+interface TeamRef {
+	id: string;
+	name: string;
+}
+
 function BracketCard({
 	match,
 	label,
-	onClick,
+	onOpenBreakdown,
 }: {
 	match: MatchWithTeams | null;
 	label: string;
-	onClick?: (m: MatchWithTeams) => void;
+	onOpenBreakdown?: (team1: TeamRef, team2: TeamRef | null, initialTeam: 1 | 2) => void;
 }) {
 	const t1 = match?.team_1;
 	const t2 = match?.team_2;
@@ -23,14 +28,27 @@ function BracketCard({
 	const t2Wins = !!match?.winner_id && match.winner_id === match.team_2_id;
 	const decided = !!match?.winner_id;
 
-	const isClickable = !!match && !!onClick;
+	const team1Ref: TeamRef | null = t1 ? { id: t1.id, name: t1.team_name } : null;
+	const team2Ref: TeamRef | null = t2 ? { id: t2.id, name: t2.team_name } : null;
+	const isClickable = !!onOpenBreakdown && !!(team1Ref || team2Ref);
+
+	// Opens the breakdown modal for whichever team was tapped, keeping the
+	// other team (if any) available for the modal's prev/next toggle.
+	function openTeam(slot: 1 | 2) {
+		if (!onOpenBreakdown) return;
+		if (slot === 1 && team1Ref) onOpenBreakdown(team1Ref, team2Ref, 1);
+		else if (slot === 2 && team2Ref) {
+			if (team1Ref) onOpenBreakdown(team1Ref, team2Ref, 2);
+			else onOpenBreakdown(team2Ref, null, 1);
+		}
+	}
 
 	const cardContent = (
 		<div
 			className={`border-2 border-editorial-ink bg-white shadow-[3px_3px_0px_0px_rgba(26,26,26,0.9)] ${
 				isClickable ? "cursor-pointer hover:shadow-[5px_5px_0px_0px_rgba(26,26,26,0.9)] transition-shadow active:shadow-none" : ""
 			}`}
-			onClick={() => match && onClick?.(match)}
+			onClick={() => openTeam(1)}
 		>
 			{/* Header bar */}
 			<div className="flex items-center justify-between px-2.5 py-1 bg-editorial-ink">
@@ -51,6 +69,7 @@ function BracketCard({
 
 			{/* Team 1 */}
 			<div
+				onClick={team1Ref ? (e) => { e.stopPropagation(); openTeam(1); } : undefined}
 				className={`flex items-center gap-1.5 px-2.5 py-2.5 border-b border-editorial-ink/10 transition-opacity ${
 					t2Wins ? "opacity-35" : ""
 				} ${t1Wins ? "bg-editorial-gold/10" : ""}`}
@@ -92,6 +111,7 @@ function BracketCard({
 
 			{/* Team 2 */}
 			<div
+				onClick={team2Ref ? (e) => { e.stopPropagation(); openTeam(2); } : undefined}
 				className={`flex items-center gap-1.5 px-2.5 py-2.5 border-t border-editorial-ink/10 transition-opacity ${
 					t1Wins ? "opacity-35" : ""
 				} ${t2Wins ? "bg-editorial-gold/10" : ""}`}
@@ -133,10 +153,10 @@ function BracketCard({
 
 interface KnockoutBracketProps {
 	category: Category;
-	onSelectMatch?: (match: MatchWithTeams) => void;
+	onOpenBreakdown?: (team1: TeamRef, team2: TeamRef | null, initialTeam: 1 | 2) => void;
 }
 
-export function KnockoutBracket({ category, onSelectMatch }: KnockoutBracketProps) {
+export function KnockoutBracket({ category, onOpenBreakdown }: KnockoutBracketProps) {
 	const [sfMatches, setSfMatches] = useState<MatchWithTeams[]>([]);
 	const [finalMatch, setFinalMatch] = useState<MatchWithTeams | null>(null);
 	const [thirdMatch, setThirdMatch] = useState<MatchWithTeams | null>(null);
@@ -224,13 +244,13 @@ export function KnockoutBracket({ category, onSelectMatch }: KnockoutBracketProp
 						<p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1.5">
 							Semi-Final 1
 						</p>
-						<BracketCard match={sf1} label="SF 1" onClick={onSelectMatch} />
+						<BracketCard match={sf1} label="SF 1" onOpenBreakdown={onOpenBreakdown} />
 					</div>
 					<div>
 						<p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1.5">
 							Semi-Final 2
 						</p>
-						<BracketCard match={sf2} label="SF 2" onClick={onSelectMatch} />
+						<BracketCard match={sf2} label="SF 2" onOpenBreakdown={onOpenBreakdown} />
 					</div>
 				</div>
 
@@ -245,7 +265,7 @@ export function KnockoutBracket({ category, onSelectMatch }: KnockoutBracketProp
 					<p className="text-[9px] font-black uppercase tracking-widest text-editorial-gold">
 						Final
 					</p>
-					<BracketCard match={finalMatch} label="Final" onClick={onSelectMatch} />
+					<BracketCard match={finalMatch} label="Final" onOpenBreakdown={onOpenBreakdown} />
 					{champion ? (
 						<div className="flex items-center gap-2 mt-1">
 							<span className="text-base leading-none">🏆</span>
@@ -272,13 +292,13 @@ export function KnockoutBracket({ category, onSelectMatch }: KnockoutBracketProp
 						<p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-2">
 							Semi-Final 1
 						</p>
-						<BracketCard match={sf1} label="SF 1" onClick={onSelectMatch} />
+						<BracketCard match={sf1} label="SF 1" onOpenBreakdown={onOpenBreakdown} />
 					</div>
 					<div className="flex-1 flex flex-col justify-center py-3 pr-4">
 						<p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-2">
 							Semi-Final 2
 						</p>
-						<BracketCard match={sf2} label="SF 2" onClick={onSelectMatch} />
+						<BracketCard match={sf2} label="SF 2" onOpenBreakdown={onOpenBreakdown} />
 					</div>
 				</div>
 
@@ -293,7 +313,7 @@ export function KnockoutBracket({ category, onSelectMatch }: KnockoutBracketProp
 					<p className="text-[9px] font-black uppercase tracking-widest text-editorial-gold">
 						Final
 					</p>
-					<BracketCard match={finalMatch} label="Final" onClick={onSelectMatch} />
+					<BracketCard match={finalMatch} label="Final" onOpenBreakdown={onOpenBreakdown} />
 					{champion ? (
 						<div className="flex items-center gap-2 mt-1">
 							<span className="text-lg leading-none">🏆</span>
@@ -323,7 +343,7 @@ export function KnockoutBracket({ category, onSelectMatch }: KnockoutBracketProp
 						<div className="h-px flex-1 bg-gray-100" />
 					</div>
 					<div className="md:max-w-xs">
-						<BracketCard match={thirdMatch} label="3rd Place" onClick={onSelectMatch} />
+						<BracketCard match={thirdMatch} label="3rd Place" onOpenBreakdown={onOpenBreakdown} />
 					</div>
 					{bronzeWinner ? (
 						<div className="flex items-center gap-2 mt-2 px-1">

@@ -6,10 +6,17 @@ import {
 } from "./LockedScoreboardScreen";
 import { MatchNode } from "./MatchNode";
 
+interface TeamRef {
+	id: string;
+	name: string;
+}
+
 interface Match {
 	id: string;
 	team1: string;
 	team2: string;
+	team1Id?: string | null;
+	team2Id?: string | null;
 	team1Score: number | null;
 	team2Score: number | null;
 	team1R1: number | null;
@@ -27,8 +34,7 @@ interface BracketListProps {
 	rawData?: string[][];
 	sheetName?: string;
 	rankingMap?: Record<string, number>;
-	onSelectMatch: (match: Match) => void;
-	onTeamBreakdown?: (teamId: string, teamName: string) => void;
+	onOpenBreakdown?: (team1: TeamRef, team2: TeamRef | null, initialTeam: 1 | 2) => void;
 }
 
 export function BracketList({
@@ -36,8 +42,7 @@ export function BracketList({
 	rawData,
 	sheetName,
 	rankingMap = {},
-	onSelectMatch,
-	onTeamBreakdown,
+	onOpenBreakdown,
 }: BracketListProps) {
 	// Check if scoreboard is locked (rawData is passed for bracket phases)
 	if (rawData && isScoreboardLocked(rawData)) {
@@ -57,8 +62,9 @@ export function BracketList({
 						<ByeCard
 							key={m.id || i}
 							team={m.team1}
+							teamId={m.team1Id}
 							station={m.station}
-							onClick={() => onSelectMatch(m)}
+							onOpenBreakdown={onOpenBreakdown}
 						/>
 					) : (
 						<MatchNode
@@ -66,8 +72,7 @@ export function BracketList({
 							match={m}
 							sheetName={sheetName}
 							rankingMap={rankingMap}
-							onClick={() => onSelectMatch(m)}
-							onTeamBreakdown={onTeamBreakdown}
+							onOpenBreakdown={onOpenBreakdown}
 						/>
 					),
 				)}

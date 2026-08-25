@@ -21,9 +21,9 @@ import { AnimatedScore } from "./AnimatedScore";
 const NODE_WIDTH = 220;
 const NODE_HEIGHT = 116;
 
-function layout(matchNodes: { id: string; parentId?: string }[]) {
+function layout(matchNodes: { id: string; parentId?: string }[], direction: "LR" | "TB") {
 	const g = new dagre.graphlib.Graph();
-	g.setGraph({ rankdir: "LR", nodesep: 32, ranksep: 72 });
+	g.setGraph({ rankdir: direction, nodesep: 32, ranksep: 72 });
 	g.setDefaultEdgeLabel(() => ({}));
 	for (const n of matchNodes) {
 		g.setNode(n.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
@@ -134,7 +134,7 @@ function MatchFlowNode({ data }: NodeProps & { data: MatchNodeData }) {
 		<div
 			style={{ width: NODE_WIDTH }}
 			onClick={() => openTeam(1)}
-			className={`overflow-hidden rounded-xl border bg-editorial-bg shadow-sm transition-shadow ${
+			className={`overflow-hidden rounded-md border bg-white shadow-sm transition-shadow ${
 				highlight ? "border-editorial-gold" : "border-gray-200"
 			} ${clickable ? "cursor-pointer hover:shadow-md" : ""}`}
 		>
@@ -207,7 +207,7 @@ function BracketCard({
 
 	return (
 		<div
-			className={`rounded-xl border border-gray-200 bg-editorial-bg shadow-sm overflow-hidden ${
+			className={`rounded-md border border-gray-200 bg-white shadow-sm overflow-hidden ${
 				isClickable ? "cursor-pointer hover:shadow-md transition-shadow" : ""
 			}`}
 			onClick={() => openTeam(1)}
@@ -255,6 +255,14 @@ export function KnockoutBracket({ category, onOpenBreakdown }: KnockoutBracketPr
 	const [finalMatch, setFinalMatch] = useState<MatchWithTeams | null>(null);
 	const [thirdMatch, setThirdMatch] = useState<MatchWithTeams | null>(null);
 	const [isLoading, setIsLoading] = useState(true);
+	const [isVertical, setIsVertical] = useState(() => !window.matchMedia("(min-width: 640px)").matches);
+
+	useEffect(() => {
+		const mq = window.matchMedia("(min-width: 640px)");
+		const onChange = () => setIsVertical(!mq.matches);
+		mq.addEventListener("change", onChange);
+		return () => mq.removeEventListener("change", onChange);
+	}, []);
 
 	async function load() {
 		const { data } = await supabase
@@ -294,11 +302,14 @@ export function KnockoutBracket({ category, onOpenBreakdown }: KnockoutBracketPr
 	const bronzeWinner = thirdMatch?.winner ?? null;
 
 	const { nodes, edges } = useMemo<{ nodes: Node[]; edges: Edge[] }>(() => {
-		const positions = layout([
-			{ id: "sf1", parentId: "final" },
-			{ id: "sf2", parentId: "final" },
-			{ id: "final" },
-		]);
+		const positions = layout(
+			[
+				{ id: "sf1", parentId: "final" },
+				{ id: "sf2", parentId: "final" },
+				{ id: "final" },
+			],
+			isVertical ? "TB" : "LR",
+		);
 		const mk = (id: string, match: MatchWithTeams | null, label: string, highlight = false): Node => ({
 			id,
 			type: "match",
@@ -317,7 +328,7 @@ export function KnockoutBracket({ category, onOpenBreakdown }: KnockoutBracketPr
 				{ id: "e-sf2-final", source: "sf2", target: "final", type: "smoothstep", style: { stroke: "#d1d5db", strokeWidth: 2 } },
 			],
 		};
-	}, [sf1, sf2, finalMatch, onOpenBreakdown]);
+	}, [sf1, sf2, finalMatch, onOpenBreakdown, isVertical]);
 
 	if (isLoading) {
 		return (
@@ -353,7 +364,11 @@ export function KnockoutBracket({ category, onOpenBreakdown }: KnockoutBracketPr
 			</div>
 
 			{/* ── Bracket canvas — auto-laid-out with dagre, nodes can be dragged to rearrange ── */}
-			<div className="h-100 w-full rounded-xl border border-gray-200 bg-gray-100 sm:h-130">
+			<div
+				className={`w-full rounded-md border border-editorial-ink/10 bg-editorial-ink/3 ${
+					isVertical ? "h-110" : "h-100 sm:h-130"
+				}`}
+			>
 				<ReactFlow
 					nodes={nodes}
 					edges={edges}
@@ -368,7 +383,7 @@ export function KnockoutBracket({ category, onOpenBreakdown }: KnockoutBracketPr
 					zoomOnScroll={false}
 					proOptions={{ hideAttribution: true }}
 				>
-					<Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#d1d5db" />
+					<Background variant={BackgroundVariant.Dots} gap={20} size={1} color="rgba(26,26,26,0.08)" />
 				</ReactFlow>
 			</div>
 

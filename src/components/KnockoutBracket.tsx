@@ -1,19 +1,5 @@
-import dagre from "@dagrejs/dagre";
-import {
-	Background,
-	BackgroundVariant,
-	type Edge,
-	Handle,
-	type Node,
-	type NodeProps,
-	Panel,
-	Position,
-	ReactFlow,
-	useNodesState,
-} from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
 import { Trophy } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { getCountryFlag } from "../lib/countryFlag";
 import type { Category, MatchWithTeams } from "../lib/database.types";
 import { supabase } from "../lib/supabase";
@@ -70,25 +56,17 @@ function TeamRow({
 				{name ?? placeholder}
 			</span>
 			{wins && (
-				<span className="shrink-0 text-[9px] font-black uppercase tracking-widest text-gray-500">
-					Won
-				</span>
+				<span className="shrink-0 text-[9px] font-black uppercase tracking-widest text-gray-500">Won</span>
 			)}
 			{score !== null && (
-				<span
-					className={`w-12 shrink-0 text-right font-mono text-xl font-black leading-none ${
-						wins ? "text-editorial-ink" : "text-editorial-ink"
-					}`}
-				>
+				<span className="w-12 shrink-0 text-right font-mono text-xl font-black leading-none text-editorial-ink">
 					<AnimatedScore value={String(score)} />
 				</span>
 			)}
 		</>
 	);
 
-	const base = `relative flex w-full items-center gap-2 px-3 py-3 transition-opacity ${
-		faded ? "opacity-40" : ""
-	}`;
+	const base = `relative flex w-full items-center gap-2 px-3 py-3 transition-opacity ${faded ? "opacity-40" : ""}`;
 
 	if (!onClick) return <div className={base}>{content}</div>;
 	return (
@@ -109,14 +87,12 @@ function MatchCard({
 	match,
 	label,
 	feeders,
-	featured = false,
 	onOpenBreakdown,
 }: {
 	match: MatchWithTeams | null;
 	label: string;
 	/** What fills an empty slot, e.g. ["Winner of Semi-Final 1", "Winner of Semi-Final 2"]. */
 	feeders: [string, string];
-	featured?: boolean;
 	onOpenBreakdown?: OpenBreakdown;
 }) {
 	const t1 = match?.team_1;
@@ -141,20 +117,10 @@ function MatchCard({
 	}
 
 	return (
-		<div
-			className={`w-full overflow-hidden border-2 bg-white ${
-				featured
-					? "border-editorial-ink shadow-[7px_7px_0px_0px_rgba(26,26,26,1)]"
-					: "border-editorial-ink shadow-[5px_5px_0px_0px_rgba(26,26,26,1)]"
-			}`}
-		>
+		<div className="w-full overflow-hidden border-2 border-editorial-ink bg-white shadow-[5px_5px_0px_0px_rgba(26,26,26,1)]">
 			<div className="flex items-center justify-between bg-editorial-ink px-3 py-1.5">
 				<span className="text-[10px] font-black uppercase tracking-widest text-editorial-gold">{label}</span>
-				<span
-					className={`text-[9px] font-black uppercase tracking-widest ${
-						decided ? "text-white/60" : "text-white/30"
-					}`}
-				>
+				<span className={`text-[9px] font-black uppercase tracking-widest ${decided ? "text-white/60" : "text-white/30"}`}>
 					{decided ? "Completed" : t1Score !== null || t2Score !== null ? "In progress" : t1 && t2 ? "To play" : "Waiting"}
 				</span>
 			</div>
@@ -183,15 +149,7 @@ function MatchCard({
 
 // ─── Champion panel ─────────────────────────────────────────────────────────
 
-function Medal({
-	title,
-	teamName,
-	country,
-}: {
-	title: string;
-	teamName: string | null | undefined;
-	country?: string | null;
-}) {
+function Champion({ teamName, country }: { teamName: string | null | undefined; country?: string | null }) {
 	const known = !!teamName;
 	const flag = getCountryFlag(country);
 	return (
@@ -200,13 +158,8 @@ function Medal({
 				known ? "border-editorial-ink bg-white" : "border-dashed border-editorial-ink/20 bg-white/50"
 			}`}
 		>
-			<Trophy
-				size={30}
-				strokeWidth={1.75}
-				className={known ? "text-editorial-gold" : "text-gray-300"}
-				aria-hidden
-			/>
-			<span className="text-[10px] font-black uppercase tracking-widest text-gray-500">{title}</span>
+			<Trophy size={30} strokeWidth={1.75} className={known ? "text-editorial-gold" : "text-gray-300"} aria-hidden />
+			<span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Champion</span>
 			{known ? (
 				<span className="flex items-center gap-1.5">
 					{flag && <span className="text-lg leading-none">{flag}</span>}
@@ -219,210 +172,34 @@ function Medal({
 	);
 }
 
-// ─── Connector for the stacked (phone) layout ───────────────────────────────
+// ─── Connectors ─────────────────────────────────────────────────────────────
 
+const lineOn = "bg-editorial-ink";
+const lineOff = "bg-editorial-ink/25";
+
+/** A short vertical line between stacked stages. */
 function DownLine({ done }: { done: boolean }) {
-	return <span aria-hidden className={`mx-auto block h-7 w-0.5 ${done ? "bg-editorial-ink" : "bg-editorial-ink/25"}`} />;
+	return <span aria-hidden className={`mx-auto block h-8 w-0.5 ${done ? lineOn : lineOff}`} />;
 }
 
-function ColumnTitle({ children }: { children: React.ReactNode }) {
+/**
+ * Wide screens: the two semi-finals sit side by side, so their lines drop from the middle of each card, meet in a bar,
+ * and one line carries on down into the final. Each half is dark once that semi-final has a winner.
+ */
+function Join({ sf1Done, sf2Done }: { sf1Done: boolean; sf2Done: boolean }) {
 	return (
-		<p className="text-center text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">{children}</p>
-	);
-}
-
-// ─── Large screens: ReactFlow canvas, laid out automatically with dagre ─────
-
-const NODE_W = 300;
-const MATCH_H = 124;
-const MEDAL_H = 112;
-
-interface FlowData {
-	[key: string]: unknown;
-	kind: "match" | "medal" | "stage";
-	match?: MatchWithTeams | null;
-	label?: string;
-	feeders?: [string, string];
-	featured?: boolean;
-	title?: string;
-	teamName?: string | null;
-	country?: string | null;
-	text?: string;
-	onOpenBreakdown?: OpenBreakdown;
-}
-
-function FlowNode({ data }: NodeProps & { data: FlowData }) {
-	const hidden = { opacity: 0, pointerEvents: "none" as const };
-	if (data.kind === "stage") {
-		return (
-			<p style={{ width: NODE_W }} className="text-center text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">
-				{data.text}
-			</p>
-		);
-	}
-	return (
-		<div style={{ width: NODE_W }}>
-			<Handle type="target" position={Position.Left} style={hidden} />
-			<Handle type="source" position={Position.Right} style={hidden} />
-			{data.kind === "match" ? (
-				<MatchCard
-					match={data.match ?? null}
-					label={data.label ?? ""}
-					feeders={data.feeders ?? ["", ""]}
-					featured={data.featured}
-					onOpenBreakdown={data.onOpenBreakdown}
-				/>
-			) : (
-				<Medal title={data.title ?? ""} teamName={data.teamName} country={data.country} />
-			)}
+		<div className="relative mx-auto hidden h-14 w-full md:block" aria-hidden>
+			<span className={`absolute left-1/4 top-0 h-1/2 w-0.5 -translate-x-1/2 ${sf1Done ? lineOn : lineOff}`} />
+			<span className={`absolute left-1/4 top-1/2 h-0.5 w-1/4 -translate-y-1/2 ${sf1Done ? lineOn : lineOff}`} />
+			<span className={`absolute right-1/4 top-0 h-1/2 w-0.5 translate-x-1/2 ${sf2Done ? lineOn : lineOff}`} />
+			<span className={`absolute left-1/2 top-1/2 h-0.5 w-1/4 -translate-y-1/2 ${sf2Done ? lineOn : lineOff}`} />
+			<span className={`absolute left-1/2 top-1/2 h-1/2 w-0.5 -translate-x-1/2 ${sf1Done && sf2Done ? lineOn : lineOff}`} />
 		</div>
 	);
 }
 
-const nodeTypes = { flow: FlowNode };
-
-// ReactFlow's own grey connector (smoothstep = right angles with rounded corners); darker once the match is decided.
-const EDGE_IDLE = "#b1b1b7";
-const EDGE_DONE = "#6b7280";
-
-function BracketCanvas({
-	sf1,
-	sf2,
-	finalMatch,
-	thirdMatch,
-	onOpenBreakdown,
-}: {
-	sf1: MatchWithTeams | null;
-	sf2: MatchWithTeams | null;
-	finalMatch: MatchWithTeams | null;
-	thirdMatch: MatchWithTeams | null;
-	onOpenBreakdown?: OpenBreakdown;
-}) {
-	const { nodes: laidOut, edges, height } = useMemo(() => {
-		const champion = finalMatch?.winner ?? null;
-		const spec: { id: string; h: number; data: FlowData }[] = [
-			{ id: "sf1", h: MATCH_H, data: { kind: "match", match: sf1, label: "Semi-Final 1", feeders: ["Team to be decided", "Team to be decided"], onOpenBreakdown } },
-			{ id: "sf2", h: MATCH_H, data: { kind: "match", match: sf2, label: "Semi-Final 2", feeders: ["Team to be decided", "Team to be decided"], onOpenBreakdown } },
-			{ id: "final", h: MATCH_H, data: { kind: "match", match: finalMatch, label: "Final", feeders: ["Winner of Semi-Final 1", "Winner of Semi-Final 2"], featured: true, onOpenBreakdown } },
-			{ id: "third", h: MATCH_H, data: { kind: "match", match: thirdMatch, label: "3rd Place", feeders: ["Loser of Semi-Final 1", "Loser of Semi-Final 2"], onOpenBreakdown } },
-			{ id: "champion", h: MEDAL_H, data: { kind: "medal", title: "Champion", teamName: champion?.team_name, country: champion?.country } },
-		];
-		// Columns come from dagre (the links say who feeds whom). The 3rd-place match is fed by the semi-final losers; that link is used for
-		// the layout only and is not drawn.
-		const links: { from: string; to: string; won: boolean; draw: boolean }[] = [
-			{ from: "sf1", to: "final", won: !!sf1?.winner_id, draw: true },
-			{ from: "sf2", to: "final", won: !!sf2?.winner_id, draw: true },
-			{ from: "sf1", to: "third", won: false, draw: false },
-			{ from: "sf2", to: "third", won: false, draw: false },
-			{ from: "final", to: "champion", won: !!finalMatch?.winner_id, draw: true },
-		];
-
-		const g = new dagre.graphlib.Graph();
-		g.setGraph({ rankdir: "LR", nodesep: 36, ranksep: 96, marginx: 8, marginy: 8 });
-		g.setDefaultEdgeLabel(() => ({}));
-		for (const n of spec) g.setNode(n.id, { width: NODE_W, height: n.h });
-		for (const l of links) g.setEdge(l.from, l.to);
-		dagre.layout(g);
-
-		// Rows: semi-finals on top of each other, the final centred between them, the 3rd-place match under the final.
-		const GAP = 56;
-		const top: Record<string, number> = {};
-		top.sf1 = 0;
-		top.sf2 = MATCH_H + GAP;
-		top.final = (top.sf1 + top.sf2) / 2;
-		top.third = top.final + MATCH_H + GAP + 24;
-		top.champion = top.final + (MATCH_H - MEDAL_H) / 2;
-
-		const nodes: Node[] = spec.map((n) => ({
-			id: n.id,
-			type: "flow",
-			position: { x: g.node(n.id).x - NODE_W / 2, y: top[n.id] },
-			data: n.data,
-			draggable: true,
-			selectable: false,
-		}));
-		const heading = (id: string, text: string, ref: string, y: number): Node => ({
-			id,
-			type: "flow",
-			position: { x: g.node(ref).x - NODE_W / 2, y },
-			data: { kind: "stage", text },
-			draggable: false,
-			selectable: false,
-			focusable: false,
-		});
-		nodes.push(
-			heading("h-sf", "Semi-Finals", "sf1", -30),
-			heading("h-final", "Final", "final", top.final - 30),
-			heading("h-third", "3rd Place Match", "third", top.third - 30),
-		);
-		const edges: Edge[] = links
-			.filter((l) => l.draw)
-			.map((l) => ({
-				id: `${l.from}-${l.to}`,
-				source: l.from,
-				target: l.to,
-				type: "smoothstep",
-				style: { stroke: l.won ? EDGE_DONE : EDGE_IDLE, strokeWidth: l.won ? 2 : 1.5 },
-			}));
-		const bottom = top.third + MATCH_H;
-		return { nodes, edges, height: bottom + 30 + 24 };
-	}, [sf1, sf2, finalMatch, thirdMatch, onOpenBreakdown]);
-
-	// Cards can be dragged. When the scores refresh, a card that was moved keeps its new place.
-	const [nodes, setNodes, onNodesChange] = useNodesState<Node>(laidOut);
-	const moved = useRef<Record<string, { x: number; y: number }>>({});
-	const [hasMoved, setHasMoved] = useState(false);
-	useEffect(() => {
-		setNodes(laidOut.map((n) => (moved.current[n.id] ? { ...n, position: moved.current[n.id] } : n)));
-	}, [laidOut, setNodes]);
-
-	function resetLayout() {
-		moved.current = {};
-		setHasMoved(false);
-		setNodes(laidOut);
-	}
-
-	return (
-		<div className="w-full border-2 border-editorial-ink/10 bg-white/40" style={{ height }}>
-			<ReactFlow
-				nodes={hasMoved ? nodes.map((n) => ((n.data as FlowData).kind === "stage" ? { ...n, hidden: true } : n)) : nodes}
-				edges={edges}
-				onNodesChange={onNodesChange}
-				onNodeDragStop={(_, node) => {
-					moved.current[node.id] = node.position;
-					setHasMoved(true);
-				}}
-				nodeDragThreshold={4}
-				nodeTypes={nodeTypes}
-				fitView
-				fitViewOptions={{ padding: 0.03, maxZoom: 1.1 }}
-				minZoom={0.5}
-				maxZoom={1.25}
-				nodesDraggable
-				nodesConnectable={false}
-				elementsSelectable={false}
-				panOnDrag
-				zoomOnScroll={false}
-				zoomOnPinch={false}
-				zoomOnDoubleClick={false}
-				preventScrolling={false}
-				proOptions={{ hideAttribution: true }}
-			>
-				<Background variant={BackgroundVariant.Dots} gap={22} size={1} color="rgba(26,26,26,0.10)" />
-				{hasMoved && (
-					<Panel position="top-right">
-						<button
-							type="button"
-							onClick={resetLayout}
-							className="border-2 border-editorial-ink bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-editorial-ink shadow-[3px_3px_0px_0px_rgba(26,26,26,1)] active:shadow-none"
-						>
-							Reset layout
-						</button>
-					</Panel>
-				)}
-			</ReactFlow>
-		</div>
-	);
+function StageTitle({ children }: { children: React.ReactNode }) {
+	return <p className="text-center text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">{children}</p>;
 }
 
 // ─── Self-contained bracket that fetches its own data ───────────────────────
@@ -488,76 +265,59 @@ export function KnockoutBracket({ category, onOpenBreakdown }: KnockoutBracketPr
 		);
 	}
 
-	const sf1Card = (
-		<MatchCard
-			match={sf1}
-			label="Semi-Final 1"
-			feeders={["Team to be decided", "Team to be decided"]}
-			onOpenBreakdown={onOpenBreakdown}
-		/>
-	);
-	const sf2Card = (
-		<MatchCard
-			match={sf2}
-			label="Semi-Final 2"
-			feeders={["Team to be decided", "Team to be decided"]}
-			onOpenBreakdown={onOpenBreakdown}
-		/>
-	);
-	const finalCard = (
-		<MatchCard
-			match={finalMatch}
-			label="Final"
-			feeders={["Winner of Semi-Final 1", "Winner of Semi-Final 2"]}
-			featured
-			onOpenBreakdown={onOpenBreakdown}
-		/>
-	);
-
 	return (
 		<div className="w-full space-y-10 py-2">
 			{/* Title */}
 			<div>
 				<h2 className="text-2xl font-black uppercase tracking-widest text-editorial-ink">Knockout Bracket</h2>
 				<div className="mb-2 mt-2 h-1 w-12 bg-editorial-gold" />
-				<p className="text-xs text-gray-500">
-					Semi-Finals → Final · 3rd Place. Tap a team to see how its score was made.
-				</p>
+				<p className="text-xs text-gray-500">Semi-Finals → Final · 3rd Place. Tap a team to see how its score was made.</p>
 			</div>
 
-			{/* ── Large screens: semi-finals → final → champion, laid out automatically ── */}
-			<div className="hidden lg:block">
-				<BracketCanvas
-					sf1={sf1}
-					sf2={sf2}
-					finalMatch={finalMatch}
-					thirdMatch={thirdMatch}
-					onOpenBreakdown={onOpenBreakdown}
-				/>
-			</div>
-
-			{/* ── Phones and tablets: stacked, top to bottom ── */}
-			<div className="mx-auto flex max-w-md flex-col lg:hidden">
-				<ColumnTitle>Semi-Finals</ColumnTitle>
-				<div className="mt-3 space-y-6">
-					{sf1Card}
-					{sf2Card}
+			{/* The bracket: semi-finals → final → champion, top to bottom. Side by side on wide screens, stacked on narrow ones. */}
+			<div className="mx-auto flex max-w-4xl flex-col">
+				<StageTitle>Semi-Finals</StageTitle>
+				<div className="mt-3 grid gap-6 md:grid-cols-2 md:gap-10">
+					<MatchCard
+						match={sf1}
+						label="Semi-Final 1"
+						feeders={["Team to be decided", "Team to be decided"]}
+						onOpenBreakdown={onOpenBreakdown}
+					/>
+					<MatchCard
+						match={sf2}
+						label="Semi-Final 2"
+						feeders={["Team to be decided", "Team to be decided"]}
+						onOpenBreakdown={onOpenBreakdown}
+					/>
 				</div>
-				<DownLine done={sf1Done && sf2Done} />
-				<ColumnTitle>Final</ColumnTitle>
-				<div className="mt-3">{finalCard}</div>
-				<DownLine done={finalDone} />
-				<Medal title="Champion" teamName={champion?.team_name} country={champion?.country} />
+
+				<Join sf1Done={sf1Done} sf2Done={sf2Done} />
+				<div className="md:hidden">
+					<DownLine done={sf1Done && sf2Done} />
+				</div>
+
+				<div className="mx-auto flex w-full max-w-md flex-col pt-2">
+					<StageTitle>Final</StageTitle>
+					<div className="mt-3">
+						<MatchCard
+							match={finalMatch}
+							label="Final"
+							feeders={["Winner of Semi-Final 1", "Winner of Semi-Final 2"]}
+							onOpenBreakdown={onOpenBreakdown}
+						/>
+					</div>
+					<DownLine done={finalDone} />
+					<Champion teamName={champion?.team_name} country={champion?.country} />
+				</div>
 			</div>
 
-			{/* ── 3rd place (phones and tablets; on large screens it is part of the canvas) ── */}
+			{/* 3rd place: its own match, shown separately from the bracket */}
 			{(thirdMatch || (sf1 && sf2)) && (
-				<div className="lg:hidden">
+				<div>
 					<div className="mb-4 flex items-center gap-3">
 						<div className="h-px flex-1 bg-editorial-ink/15" />
-						<p className="shrink-0 text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">
-							3rd Place Match
-						</p>
+						<p className="shrink-0 text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">3rd Place Match</p>
 						<div className="h-px flex-1 bg-editorial-ink/15" />
 					</div>
 					<div className="mx-auto max-w-md">

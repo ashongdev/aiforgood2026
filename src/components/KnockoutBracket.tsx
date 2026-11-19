@@ -6,12 +6,14 @@ import {
 	Handle,
 	type Node,
 	type NodeProps,
+	Panel,
 	Position,
 	ReactFlow,
+	useNodesState,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Trophy } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getCountryFlag } from "../lib/countryFlag";
 import type { Category, MatchWithTeams } from "../lib/database.types";
 import { supabase } from "../lib/supabase";
@@ -179,22 +181,19 @@ function MatchCard({
 	);
 }
 
-// ─── Champion / bronze panel ────────────────────────────────────────────────
+// ─── Champion panel ─────────────────────────────────────────────────────────
 
 function Medal({
 	title,
 	teamName,
 	country,
-	tone,
 }: {
 	title: string;
 	teamName: string | null | undefined;
 	country?: string | null;
-	tone: "gold" | "bronze";
 }) {
 	const known = !!teamName;
 	const flag = getCountryFlag(country);
-	const accent = tone === "gold" ? "text-editorial-gold" : "text-amber-700";
 	return (
 		<div
 			className={`flex w-full flex-col items-center gap-1.5 border-2 px-4 py-5 text-center ${
@@ -202,9 +201,9 @@ function Medal({
 			}`}
 		>
 			<Trophy
-				size={tone === "gold" ? 30 : 22}
+				size={30}
 				strokeWidth={1.75}
-				className={known ? accent : "text-gray-300"}
+				className={known ? "text-editorial-gold" : "text-gray-300"}
 				aria-hidden
 			/>
 			<span className="text-[10px] font-black uppercase tracking-widest text-gray-500">{title}</span>
@@ -248,7 +247,6 @@ interface FlowData {
 	title?: string;
 	teamName?: string | null;
 	country?: string | null;
-	tone?: "gold" | "bronze";
 	text?: string;
 	onOpenBreakdown?: OpenBreakdown;
 }
@@ -275,7 +273,7 @@ function FlowNode({ data }: NodeProps & { data: FlowData }) {
 					onOpenBreakdown={data.onOpenBreakdown}
 				/>
 			) : (
-				<Medal title={data.title ?? ""} teamName={data.teamName} country={data.country} tone={data.tone ?? "gold"} />
+				<Medal title={data.title ?? ""} teamName={data.teamName} country={data.country} />
 			)}
 		</div>
 	);
@@ -283,8 +281,9 @@ function FlowNode({ data }: NodeProps & { data: FlowData }) {
 
 const nodeTypes = { flow: FlowNode };
 
-const GOLD = "#1a1a1a";
-const GREY = "rgba(26,26,26,0.28)";
+// ReactFlow's own grey connector (smoothstep = right angles with rounded corners); darker once the match is decided.
+const EDGE_IDLE = "#b1b1b7";
+const EDGE_DONE = "#6b7280";
 
 function BracketCanvas({
 	sf1,
@@ -299,16 +298,14 @@ function BracketCanvas({
 	thirdMatch: MatchWithTeams | null;
 	onOpenBreakdown?: OpenBreakdown;
 }) {
-	const { nodes, edges, height } = useMemo(() => {
+	const { nodes: laidOut, edges, height } = useMemo(() => {
 		const champion = finalMatch?.winner ?? null;
-		const bronze = thirdMatch?.winner ?? null;
 		const spec: { id: string; h: number; data: FlowData }[] = [
 			{ id: "sf1", h: MATCH_H, data: { kind: "match", match: sf1, label: "Semi-Final 1", feeders: ["Team to be decided", "Team to be decided"], onOpenBreakdown } },
 			{ id: "sf2", h: MATCH_H, data: { kind: "match", match: sf2, label: "Semi-Final 2", feeders: ["Team to be decided", "Team to be decided"], onOpenBreakdown } },
 			{ id: "final", h: MATCH_H, data: { kind: "match", match: finalMatch, label: "Final", feeders: ["Winner of Semi-Final 1", "Winner of Semi-Final 2"], featured: true, onOpenBreakdown } },
 			{ id: "third", h: MATCH_H, data: { kind: "match", match: thirdMatch, label: "3rd Place", feeders: ["Loser of Semi-Final 1", "Loser of Semi-Final 2"], onOpenBreakdown } },
-			{ id: "champion", h: MEDAL_H, data: { kind: "medal", title: "Champion", teamName: champion?.team_name, country: champion?.country, tone: "gold" } },
-			{ id: "bronze", h: MEDAL_H, data: { kind: "medal", title: "Bronze", teamName: bronze?.team_name, country: bronze?.country, tone: "bronze" } },
+			{ id: "champion", h: MEDAL_H, data: { kind: "medal", title: "Champion", teamName: champion?.team_name, country: champion?.country } },
 		];
 		// Columns come from dagre (the links say who feeds whom). The 3rd-place match is fed by the semi-final losers; that link is used for
 		// the layout only and is not drawn.
@@ -318,7 +315,6 @@ function BracketCanvas({
 			{ from: "sf1", to: "third", won: false, draw: false },
 			{ from: "sf2", to: "third", won: false, draw: false },
 			{ from: "final", to: "champion", won: !!finalMatch?.winner_id, draw: true },
-			{ from: "third", to: "bronze", won: !!thirdMatch?.winner_id, draw: true },
 		];
 
 		const g = new dagre.graphlib.Graph();
@@ -336,14 +332,13 @@ function BracketCanvas({
 		top.final = (top.sf1 + top.sf2) / 2;
 		top.third = top.final + MATCH_H + GAP + 24;
 		top.champion = top.final + (MATCH_H - MEDAL_H) / 2;
-		top.bronze = top.third + (MATCH_H - MEDAL_H) / 2;
 
 		const nodes: Node[] = spec.map((n) => ({
 			id: n.id,
 			type: "flow",
 			position: { x: g.node(n.id).x - NODE_W / 2, y: top[n.id] },
 			data: n.data,
-			draggable: false,
+			draggable: true,
 			selectable: false,
 		}));
 		const heading = (id: string, text: string, ref: string, y: number): Node => ({
@@ -367,26 +362,46 @@ function BracketCanvas({
 				source: l.from,
 				target: l.to,
 				type: "smoothstep",
-				style: { stroke: l.won ? GOLD : GREY, strokeWidth: 2.5 },
+				style: { stroke: l.won ? EDGE_DONE : EDGE_IDLE, strokeWidth: l.won ? 2 : 1.5 },
 			}));
 		const bottom = top.third + MATCH_H;
 		return { nodes, edges, height: bottom + 30 + 24 };
 	}, [sf1, sf2, finalMatch, thirdMatch, onOpenBreakdown]);
 
+	// Cards can be dragged. When the scores refresh, a card that was moved keeps its new place.
+	const [nodes, setNodes, onNodesChange] = useNodesState<Node>(laidOut);
+	const moved = useRef<Record<string, { x: number; y: number }>>({});
+	const [hasMoved, setHasMoved] = useState(false);
+	useEffect(() => {
+		setNodes(laidOut.map((n) => (moved.current[n.id] ? { ...n, position: moved.current[n.id] } : n)));
+	}, [laidOut, setNodes]);
+
+	function resetLayout() {
+		moved.current = {};
+		setHasMoved(false);
+		setNodes(laidOut);
+	}
+
 	return (
 		<div className="w-full border-2 border-editorial-ink/10 bg-white/40" style={{ height }}>
 			<ReactFlow
-				nodes={nodes}
+				nodes={hasMoved ? nodes.map((n) => ((n.data as FlowData).kind === "stage" ? { ...n, hidden: true } : n)) : nodes}
 				edges={edges}
+				onNodesChange={onNodesChange}
+				onNodeDragStop={(_, node) => {
+					moved.current[node.id] = node.position;
+					setHasMoved(true);
+				}}
+				nodeDragThreshold={4}
 				nodeTypes={nodeTypes}
 				fitView
 				fitViewOptions={{ padding: 0.03, maxZoom: 1.1 }}
 				minZoom={0.5}
 				maxZoom={1.25}
-				nodesDraggable={false}
+				nodesDraggable
 				nodesConnectable={false}
 				elementsSelectable={false}
-				panOnDrag={false}
+				panOnDrag
 				zoomOnScroll={false}
 				zoomOnPinch={false}
 				zoomOnDoubleClick={false}
@@ -394,6 +409,17 @@ function BracketCanvas({
 				proOptions={{ hideAttribution: true }}
 			>
 				<Background variant={BackgroundVariant.Dots} gap={22} size={1} color="rgba(26,26,26,0.10)" />
+				{hasMoved && (
+					<Panel position="top-right">
+						<button
+							type="button"
+							onClick={resetLayout}
+							className="border-2 border-editorial-ink bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-editorial-ink shadow-[3px_3px_0px_0px_rgba(26,26,26,1)] active:shadow-none"
+						>
+							Reset layout
+						</button>
+					</Panel>
+				)}
 			</ReactFlow>
 		</div>
 	);
@@ -445,7 +471,6 @@ export function KnockoutBracket({ category, onOpenBreakdown }: KnockoutBracketPr
 	const sf1 = sfMatches[0] ?? null;
 	const sf2 = sfMatches[1] ?? null;
 	const champion = finalMatch?.winner ?? null;
-	const bronzeWinner = thirdMatch?.winner ?? null;
 	const sf1Done = !!sf1?.winner_id;
 	const sf2Done = !!sf2?.winner_id;
 	const finalDone = !!finalMatch?.winner_id;
@@ -522,7 +547,7 @@ export function KnockoutBracket({ category, onOpenBreakdown }: KnockoutBracketPr
 				<ColumnTitle>Final</ColumnTitle>
 				<div className="mt-3">{finalCard}</div>
 				<DownLine done={finalDone} />
-				<Medal title="Champion" teamName={champion?.team_name} country={champion?.country} tone="gold" />
+				<Medal title="Champion" teamName={champion?.team_name} country={champion?.country} />
 			</div>
 
 			{/* ── 3rd place (phones and tablets; on large screens it is part of the canvas) ── */}
@@ -535,18 +560,12 @@ export function KnockoutBracket({ category, onOpenBreakdown }: KnockoutBracketPr
 						</p>
 						<div className="h-px flex-1 bg-editorial-ink/15" />
 					</div>
-					<div className="mx-auto grid max-w-3xl gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,0.7fr)] md:items-center">
+					<div className="mx-auto max-w-md">
 						<MatchCard
 							match={thirdMatch}
 							label="3rd Place"
 							feeders={["Loser of Semi-Final 1", "Loser of Semi-Final 2"]}
 							onOpenBreakdown={onOpenBreakdown}
-						/>
-						<Medal
-							title="Bronze"
-							teamName={bronzeWinner?.team_name}
-							country={bronzeWinner?.country}
-							tone="bronze"
 						/>
 					</div>
 				</div>
